@@ -158,7 +158,7 @@ usage() {
   echo "  --ctx-wait <on|off> - to wait for outstanding contexts on profiler exit [on]"
   echo "  --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]"
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
-  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [on]"
+  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]"
   echo "    To support V3 code object"
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
@@ -187,6 +187,7 @@ usage() {
   echo "  --flush-rate <rate> - to enable trace flush rate (time period)"
   echo "    Supported time formats: <number(m|s|ms|us)>"
   echo "  --parallel-kernels - to enable cnocurrent kernels"
+  echo "  --spm-mode <on|off> - to enable collecting time-based sampling of HW counter data [off]"
   echo ""
   echo "Configuration file:"
   echo "  You can set your parameters defaults preferences in the configuration file 'rpl_rc.xml'. The search path sequence: .:${HOME}:<package path>"
@@ -275,7 +276,6 @@ run() {
   fi
 
   retval=1
-  
   if [ -n "$ROCP_OUTPUT_DIR" ] ; then
     log_file="$ROCP_OUTPUT_DIR/log.txt"
     exit_file="$ROCP_OUTPUT_DIR/exit.txt"
@@ -459,6 +459,10 @@ while [ 1 ] ; do
     ARG_VAL=0
     export ROCP_K_CONCURRENT=1
     export AQLPROFILE_READ_API=1
+  elif [ "$1" = "--spm-mode" ] ; then
+    if [ "$2" = "on" ] ; then
+      export ROCP_SPM_KFD_MODE=1
+    fi
   elif [ "$1" = "--verbose" ] ; then
     ARG_VAL=0
     export ROCP_VERBOSE_MODE=1
@@ -476,6 +480,10 @@ done
 ARG_CK=`echo $ARG_IN | sed "s/^-.*$/-/"`
 if [ "$ARG_CK" = "-" ] ; then
   fatal "Wrong option '$ARG_IN'"
+fi
+
+if [ "$GEN_STATS" = "1" -a "$ROCP_TIMESTAMP_ON" = "0" ] ; then
+  fatal "Wrong options, stats enabled with disabled timestamps"
 fi
 
 if [ -z "$INPUT_FILE" ] ; then
@@ -543,13 +551,11 @@ else
   fatal "Bad input file type '$INPUT_FILE'"
 fi
 
-
 if [ -n "$csv_output" ] ; then
   rm -f $csv_output
 fi
 
 RET=1
-
 for name in $input_list; do
   run $name $OUTPUT_DIR $APP_CMD
   RET=$?
@@ -561,7 +567,6 @@ for name in $input_list; do
     break
   fi
 done
-
 
 if [ -n "$csv_output" ] ; then
   merge_output $OUTPUT_LIST
