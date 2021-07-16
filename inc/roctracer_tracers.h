@@ -54,18 +54,11 @@ struct hsa_api_trace_entry_t
 struct hsa_api_event_t : event_t
 {
 	uint32_t tid;
-	event_phase phase;
-	union
-	{
-		struct
-		{
-			uint32_t cid;
-			uint32_t pid;
-			hsa_api_data_t data;
-		};
-	};
-	hsa_api_event_t(uint64_t time_s, uint32_t tid_s, event_phase phase_s) : event_t(time_s), tid(tid_s), phase(phase_s) {}
-	hsa_api_event_t(uint64_t time_s, uint32_t tid_s, event_phase phase_s, uint32_t cid_s, uint32_t pid_s, hsa_api_data_t data_s) : event_t(time_s), tid(tid_s), phase(phase_s), cid(cid_s), pid(pid_s), data(data_s) {}
+	uint32_t cid;
+	uint32_t pid;
+	hsa_api_data_t data;
+	uint64_t end;
+	hsa_api_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, hsa_api_data_t data_s, uint64_t end_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), data(data_s), end(end_s){}
 };
 
 class HSA_API_Tracer : public Tracer<hsa_api_event_t>
@@ -82,7 +75,8 @@ struct hsa_activity_event_t : event_t
 {
 	uint32_t pid;
 	uint64_t record_index;
-	hsa_activity_event_t(uint64_t time_s, uint32_t pid_s, uint64_t record_index_s) : event_t(time_s), pid(pid_s), record_index(record_index_s) {}
+	uint64_t end_ns;
+	hsa_activity_event_t(uint64_t time_s, uint32_t pid_s, uint64_t record_index_s, uint64_t end_ns_s) : event_t(time_s), pid(pid_s), record_index(record_index_s), end_ns(end_ns_s){}
 };
 
 class HSA_Activity_Tracer : public Tracer<hsa_activity_event_t>
@@ -101,18 +95,11 @@ public:
 struct kfd_api_event_t : event_t
 {
 	uint32_t tid;
-	event_phase phase;
-	union
-	{
-		struct
-		{
-			uint32_t cid;
-			uint32_t pid;
-			kfd_api_data_t data;
-		};
-	};
-	kfd_api_event_t(uint64_t time_s, uint32_t tid_s, event_phase phase_s) : event_t(time_s), tid(tid_s), phase(phase_s) {}
-	kfd_api_event_t(uint64_t time_s, uint32_t tid_s, event_phase phase_s, uint32_t cid_s, uint32_t pid_s, kfd_api_data_t data_s) : event_t(time_s), tid(tid_s), phase(phase_s), cid(cid_s), pid(pid_s), data(data_s) {}
+	uint32_t cid;
+	uint32_t pid;
+	kfd_api_data_t data;
+	uint64_t end;
+	kfd_api_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, kfd_api_data_t data_s, uint64_t end_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), data(data_s), end(end_s) {}
 };
 
 class KFD_API_Tracer : public Tracer<kfd_api_event_t>
@@ -143,19 +130,12 @@ struct hip_api_trace_entry_t
 struct hip_api_event_t : event_t
 {
 	uint32_t tid;
-	event_phase phase;
-	union
-	{
-		struct
-		{
-			uint32_t cid;
-			uint32_t pid;
-			hip_api_data_t data;
-			const char *name;
-		};
-	};
-	hip_api_event_t(uint64_t time_s, uint32_t tid_s, event_phase phase_s) : event_t(time_s), tid(tid_s), phase(phase_s) {}
-	hip_api_event_t(uint64_t time_s, uint32_t tid_s, event_phase phase_s, uint32_t cid_s, uint32_t pid_s, hip_api_data_t data_s, const char *name_s) : event_t(time_s), tid(tid_s), phase(phase_s), cid(cid_s), pid(pid_s), data(data_s), name(name_s) {}
+	uint32_t cid;
+	uint32_t pid;
+	hip_api_data_t data;
+	const char *name;
+	uint64_t end;
+	hip_api_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, hip_api_data_t data_s, const char *name_s, uint64_t end_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), data(data_s), name(name_s), end(end_s) {}
 };
 
 class HIP_API_Tracer : public Tracer<hip_api_event_t>
@@ -169,18 +149,10 @@ public:
 //HIP activity tracing structures
 struct hip_activity_event_t : event_t
 {
-	event_phase phase;
-	union
-	{
-		struct
-		{
-			const char *name;
-			roctracer_record_t record;
-		};
-		uint64_t correlation_id;
-	};
-	hip_activity_event_t(uint64_t time_s, event_phase phase_s, uint64_t correlation_id_s) : event_t(time_s), phase(phase_s), correlation_id(correlation_id_s) {}
-	hip_activity_event_t(uint64_t time_s, event_phase phase_s, const char *name_s, roctracer_record_t record_s) : event_t(time_s), phase(phase_s), name(name_s), record(record_s) {}
+	const char *name;
+	roctracer_record_t record;
+	uint64_t correlation_id;
+	hip_activity_event_t(uint64_t time_s, const char *name_s, roctracer_record_t record_s) : event_t(time_s), name(name_s), record(record_s) {}
 };
 
 class HIP_Activity_Tracer : public Tracer<hip_activity_event_t>

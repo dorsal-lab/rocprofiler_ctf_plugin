@@ -8,6 +8,7 @@ if [ -z "$ROCTRACER_INCLUDES" ]; then export ROCTRACER_INCLUDES=/opt/rocm/roctra
 if [ -z "$ROCPROFILER_TEST" ]; then export ROCPROFILER_TEST=/opt/rocm/rocprofiler/test; fi
 if [ -z "$ROCPROFILER_INCLUDES" ]; then export ROCPROFILER_INCLUDES=/opt/rocm/rocprofiler/include; fi
 
+#barectf generate ./config.yaml --metadata-dir=./ --code-dir=./src --headers-dir=./inc;
 #Generate headers and cpp files for parsing
 python3 ./scripts/kfd_args_gen.py $ROCTRACER_INCLUDES/kfd_prof_str.h
 python3 ./scripts/hsa_args_gen.py $ROCTRACER_INCLUDES/hsa_prof_str.h
