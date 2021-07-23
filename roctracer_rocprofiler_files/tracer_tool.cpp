@@ -222,7 +222,6 @@ void* flush_thr_fun(void*) {
     if (!flush_thread_started) while(1) sleep(1);
     ROCTRACER_CALL(roctracer_flush_activity());
     roctracer::TraceBufferBase::FlushAll();
-    if(ctf_plugin) flush_ctf();
   }
 
   return NULL;

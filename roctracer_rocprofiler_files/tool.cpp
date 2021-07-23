@@ -38,8 +38,6 @@ THE SOFTWARE.
 #include <sys/types.h>
 #include <unistd.h>
 #include <dlfcn.h>
-#include <mutex>
-std::mutex context_mutex;
 
 #include <atomic>
 #include <chrono>
@@ -625,9 +623,7 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
   if (index != UINT32_MAX) {
     const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
     const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
-    context_mutex.lock();
     write_context_entry_wrapper(entry, record, nik_name, agent_info);
-    context_mutex.unlock();
   }
   if (record && to_clean) {
     delete record;
