@@ -36,7 +36,7 @@
 #include "barectf-platform-linux-fs.h"
 #include "barectf.h"
 
-#define MAX_SIZE 2
+#define MAX_SIZE 200
 
 struct barectf_platform_linux_fs_ctx
 {
