@@ -88,6 +88,7 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 		{
 			barectf_trace_hsa_function_name(ctx, hsa_table[i], GetHSAApiName(hsa_table[i]));
 		}
+		printf("Number of hsa fctn : %d\n", hsa_table_size);
 		break;
 	}
 	case (ACTIVITY_DOMAIN_KFD_API):
@@ -133,7 +134,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 	{
 		if (hsa_api_trace)
 		{
-			printf("HSA API tracing already rtr_plugin_initialized\n");
+			printf("HSA API tracing already initialized\n");
 		}
 		else
 		{
@@ -147,7 +148,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 	{
 		if (hsa_activity_trace)
 		{
-			printf("HSA activity tracing already rtr_plugin_initialized\n");
+			printf("HSA activity tracing already initialized\n");
 		}
 		else
 		{
@@ -160,7 +161,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 	{
 		if (kfd_api_trace)
 		{
-			printf("kfd_api tracing already rtr_plugin_initialized\n");
+			printf("kfd_api tracing already initialized\n");
 		}
 		else
 		{
@@ -175,7 +176,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 	{
 		if (hip_api_trace)
 		{
-			printf("hip_api tracing already rtr_plugin_initialized\n");
+			printf("hip_api tracing already initialized\n");
 		}
 		else
 		{
@@ -189,7 +190,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 	{
 		if (hip_activity_trace)
 		{
-			printf("hip_activity tracing already rtr_plugin_initialized\n");
+			printf("hip_activity tracing already initialized\n");
 		}
 		else
 		{
@@ -325,7 +326,7 @@ extern "C" void kfd_api_callback(
 	else
 	{
 		uint64_t kfd_end_timestamp = (*timer_ptr)->timestamp_fn_ns();
-		kfd_tracer_array[kfd_class_idx]->kfd_api_flush_cb(kfd_begin_timestamp, kfd_end_timestamp, cid, data);
+		kfd_tracer_array[kfd_class_idx]->kfd_api_flush_cb(kfd_begin_timestamp, kfd_end_timestamp, cid, data, GetTid(), GetPid());
 	}
 	in_kfd_api_callback = false;
 }

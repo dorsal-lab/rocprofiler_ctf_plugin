@@ -76,7 +76,7 @@ void trace_hsa_api(hsa_api_event_t *hsa_api_event, struct barectf_default_ctx *c
 
 void HSA_API_Tracer::hsa_api_flush_cb(hsa_api_trace_entry_t *entry)
 {
-	callback(entry->begin, (tracing_function)trace_hsa_api, new hsa_api_event_t(entry->begin, entry->tid, BEGIN, entry->cid, entry->pid, entry->data));
+	callback(entry->begin, (tracing_function)trace_hsa_api, new hsa_api_event_t( entry->begin, entry->tid, BEGIN, entry->cid, entry->pid, entry->data));
 	callback(entry->end, (tracing_function)trace_hsa_api, new hsa_api_event_t(entry->end, entry->tid, END));
 }
 
@@ -91,8 +91,8 @@ void HSA_Activity_Tracer::hsa_activity_callback(
 	activity_record_t *record,
 	void *arg)
 {
-	callback(record->begin_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(record->begin_ns, my_pid, index));
-	callback(record->end_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(record->end_ns, my_pid, index));
+	callback(record->begin_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(record->begin_ns, GetPid(), index));
+	callback(record->end_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(record->end_ns, GetPid(), index));
 	index++;
 }
 
@@ -116,10 +116,10 @@ void trace_kfd_api(kfd_api_event_t *kfd_event, struct barectf_default_ctx *ctx)
 	}
 }
 
-void KFD_API_Tracer::kfd_api_flush_cb(uint64_t begin, uint64_t end, uint32_t cid, const kfd_api_data_t *data)
+void KFD_API_Tracer::kfd_api_flush_cb(uint64_t begin, uint64_t end, uint32_t cid, const kfd_api_data_t *data, uint32_t tid, uint32_t pid)
 {
-	callback(begin, (tracing_function)trace_kfd_api, new kfd_api_event_t(begin, GetTid(), BEGIN, cid, my_pid, *data));
-	callback(end, (tracing_function)trace_kfd_api, new kfd_api_event_t(end, GetTid(), END));
+	callback(begin, (tracing_function)trace_kfd_api, new kfd_api_event_t(begin, tid, BEGIN, cid, pid, *data));
+	callback(end, (tracing_function)trace_kfd_api, new kfd_api_event_t(end, tid, END));
 }
 
 //HIP API tracing function
@@ -151,8 +151,8 @@ void trace_hip_api(hip_api_event_t *hip_api_event, struct barectf_default_ctx *c
 
 void HIP_API_Tracer::hip_api_flush_cb(hip_api_trace_entry_t *entry)
 {
-	callback(entry->begin, (tracing_function)trace_hip_api, new hip_api_event_t(entry->begin, GetTid(), BEGIN, entry->cid, my_pid, entry->data, entry->name));
-	callback(entry->end, (tracing_function)trace_hip_api, new hip_api_event_t(entry->end, GetTid(), END));
+	callback(entry->begin, (tracing_function)trace_hip_api, new hip_api_event_t(entry->begin, entry->tid, BEGIN, entry->cid, entry->pid, entry->data, entry->name));
+	callback(entry->end, (tracing_function)trace_hip_api, new hip_api_event_t(entry->end, entry->tid, END));
 }
 
 //HIP activity callback function
@@ -163,7 +163,7 @@ void trace_hip_activity(hip_activity_event_t *hip_activity_event, struct barectf
 	case BEGIN:
 	{
 		roctracer_record_t record = hip_activity_event->record;
-		barectf_trace_hip_activity_begin(ctx, record.device_id, record.queue_id, hip_activity_event->name, record.correlation_id, GetPid());
+		barectf_trace_hip_activity_begin(ctx, record.device_id, record.queue_id, hip_activity_event->name, record.correlation_id, hip_activity_event->pid);
 		break;
 	}
 	case END:
@@ -178,6 +178,6 @@ void HIP_Activity_Tracer::hip_activity_callback(
 	const roctracer_record_t *record,
 	const char *name)
 {
-	callback(record->begin_ns, (tracing_function)trace_hip_activity, new hip_activity_event_t(record->begin_ns, BEGIN, name, *record));
+	callback(record->begin_ns, (tracing_function)trace_hip_activity, new hip_activity_event_t(record->begin_ns, BEGIN, name, *record, GetPid()));
 	callback(record->end_ns, (tracing_function)trace_hip_activity, new hip_activity_event_t(record->end_ns, END, record->correlation_id));
 }

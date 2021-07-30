@@ -120,7 +120,7 @@ class KFD_API_Tracer : public Tracer<kfd_api_event_t>
 public:
 	KFD_API_Tracer(const char *prefix, const char *suffix) : Tracer<kfd_api_event_t>(prefix, suffix) {}
 	~KFD_API_Tracer() {}
-	void kfd_api_flush_cb(uint64_t begin, uint64_t end, uint32_t cid, const kfd_api_data_t *data);
+	void kfd_api_flush_cb(uint64_t begin, uint64_t end, uint32_t cid, const kfd_api_data_t *data, uint32_t tid, uint32_t pid);
 };
 
 //HIP API tracing structures
@@ -176,11 +176,12 @@ struct hip_activity_event_t : event_t
 		{
 			const char *name;
 			roctracer_record_t record;
+			uint32_t pid;
 		};
 		uint64_t correlation_id;
 	};
 	hip_activity_event_t(uint64_t time_s, event_phase phase_s, uint64_t correlation_id_s) : event_t(time_s), phase(phase_s), correlation_id(correlation_id_s) {}
-	hip_activity_event_t(uint64_t time_s, event_phase phase_s, const char *name_s, roctracer_record_t record_s) : event_t(time_s), phase(phase_s), name(name_s), record(record_s) {}
+	hip_activity_event_t(uint64_t time_s, event_phase phase_s, const char *name_s, roctracer_record_t record_s, uint32_t pid_s) : event_t(time_s), phase(phase_s), name(name_s), record(record_s), pid(pid_s) {}
 };
 
 class HIP_Activity_Tracer : public Tracer<hip_activity_event_t>

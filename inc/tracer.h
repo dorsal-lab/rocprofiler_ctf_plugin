@@ -29,7 +29,6 @@
 
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <mutex>
 #include <queue>
 #include <iterator>
 #include <sstream>
@@ -37,7 +36,7 @@
 #include "barectf-platform-linux-fs.h"
 #include "barectf.h"
 
-#define MAX_SIZE 200
+#define MAX_SIZE 2
 
 struct barectf_platform_linux_fs_ctx
 {

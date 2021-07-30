@@ -849,10 +849,6 @@ void tool_unload() {
   // Flush tracing pool
   close_tracing_pool();
   roctracer::TraceBufferBase::FlushAll();
-  if(ctf_plugin){
-    unload_ctf_lib();
-    dlclose(dl_handle);
-  }
 
   ONLOAD_TRACE_END();
 }
@@ -1294,7 +1290,13 @@ extern "C" DESTRUCTOR_API void destructor() {
   if (hip_api_stats) hip_api_stats->dump();
   if (hip_kernel_stats) hip_kernel_stats->dump();
   if (hip_memcpy_stats) hip_memcpy_stats->dump();
+
+  if(ctf_plugin){
+    unload_ctf_lib();
+    dlclose(dl_handle);
+  }  
   
   roctracer_unload();
   ONLOAD_TRACE_END();
+  
 }
