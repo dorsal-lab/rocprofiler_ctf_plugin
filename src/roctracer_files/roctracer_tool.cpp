@@ -88,7 +88,6 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 		{
 			barectf_trace_hsa_function_name(ctx, hsa_table[i], GetHSAApiName(hsa_table[i]));
 		}
-		printf("Number of hsa fctn : %d\n", hsa_table_size);
 		break;
 	}
 	case (ACTIVITY_DOMAIN_KFD_API):
