@@ -91,6 +91,7 @@ protected:
 	uint64_t *clock_array;
 	uint32_t size;
 	queue_array_t queue_array;
+	uint64_t nb_events;
 
 public:
 	typedef void (*tracing_function)(event_T *event, struct barectf_default_ctx *ctx);
@@ -100,6 +101,7 @@ public:
 	void add_queue();
 	void callback(uint64_t begin, tracing_function function, event_T *new_event);
 	void flush(tracing_function function);
+	uint64_t get_nb_events();
 };
 
 #include <tracer.tpp>

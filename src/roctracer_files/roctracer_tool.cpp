@@ -28,6 +28,8 @@
 #include <unistd.h>
 #include <sstream>
 #include <mutex>
+#include <sys/stat.h>
+#include <time.h>
 
 #include "ext/prof_protocol.h"
 #include "ext/hsa_rt_utils.hpp"
@@ -45,6 +47,8 @@
 #include "kfd_args_str.h"
 #include "hip_args_str.h"
 
+#define SECONDS_TO_NANOSECONDS 1000000000
+
 //Objects for CID/Names tables generation
 barectf_platform_linux_fs_ctx *tables_platform_ctx;
 barectf_default_ctx *tables_ctx;
@@ -56,6 +60,7 @@ bool hsa_activity_trace = false;
 bool kfd_api_trace = false;
 bool hip_api_trace = false;
 bool hip_activity_trace = false;
+bool associations_stream_exists = false;
 
 //Tracing objects for HSA/HIP APIs and activity
 HSA_API_Tracer *hsa_api_tracer;
@@ -74,10 +79,24 @@ kfd_tracer_array_t kfd_tracer_array;
 hsa_rt_utils::Timer **timer_ptr;
 thread_local uint64_t kfd_begin_timestamp = 0;
 static thread_local bool in_kfd_api_callback = false;
+uint64_t nb_events = 0;
+
+void write_nb_events()
+{
+	std::ostringstream outData;
+	std::stringstream ss_metadata;
+	ss_metadata << output_dir << "/CTF_trace/" << GetPid() << "_roctracer_nb_events.txt";
+	outData << nb_events;
+    std::ofstream out_file(ss_metadata.str());
+    out_file << outData.str();
+}
 
 //Create the table that associates cids to function names and write it in a stream
 void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 {
+	if(associations_stream_exists){
+		return;
+	}
 	switch (domain)
 	{
 	case (ACTIVITY_DOMAIN_HSA_API):
@@ -87,6 +106,7 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 		for (int i = 0; i < hsa_table_size; i++)
 		{
 			barectf_trace_hsa_function_name(ctx, hsa_table[i], GetHSAApiName(hsa_table[i]));
+			nb_events++;
 		}
 		break;
 	}
@@ -97,6 +117,7 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 		for (int i = 0; i < kfd_table_size; i++)
 		{
 			barectf_trace_kfd_function_name(ctx, kfd_table[i], GetKFDApiName(kfd_table[i]));
+			nb_events++;
 		}
 		break;
 	}
@@ -107,6 +128,7 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 		for (int i = 0; i < hip_table_size; i++)
 		{
 			barectf_trace_hip_function_name(ctx, hip_table[i], GetHIPApiName(hip_table[i]));
+			nb_events++;
 		}
 		break;
 	}
@@ -117,14 +139,25 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 
 //Initialize tracing for some APIS
 extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain, void *data)
-{
+{	
 	if (!rtr_plugin_initialized)
 	{
+		output_dir = output_prefix;
 		rtr_plugin_initialized = true;
 		std::stringstream ss;
 		ss << output_prefix << "/CTF_trace/strings_association_stream";
-		tables_platform_ctx = barectf_platform_linux_fs_init(512, ss.str().c_str(), 0, 0, 0, &tables_clock);
-		tables_ctx = barectf_platform_linux_fs_get_barectf_ctx(tables_platform_ctx);
+		
+		struct stat buffer;   
+        associations_stream_exists = (stat (ss.str().c_str(), &buffer) == 0); 
+		
+		struct timespec tp;
+		clock_gettime(CLOCK_MONOTONIC, &tp);
+		tables_clock = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
+		
+		if(!associations_stream_exists){
+			tables_platform_ctx = barectf_platform_linux_fs_init(512, ss.str().c_str(), 0, 0, 0, &tables_clock);
+			tables_ctx = barectf_platform_linux_fs_get_barectf_ctx(tables_platform_ctx);
+		}
 	}
 
 	switch (domain)
@@ -240,30 +273,38 @@ extern "C" void unload_ctf_lib()
 	{
 		if (hsa_api_trace)
 		{
+			nb_events = nb_events + hsa_api_tracer->get_nb_events();
 			delete hsa_api_tracer;
 		}
 		if (hsa_activity_trace)
 		{
+			nb_events = nb_events + hsa_activity_tracer->get_nb_events();
 			delete hsa_activity_tracer;
 		}
 		if (kfd_api_trace)
 		{
 			for (int i = 0; i < nb_kfd_thread; i++)
 			{
+				nb_events = nb_events + kfd_tracer_array[i]->get_nb_events();
 				delete kfd_tracer_array[i];
 			}
 			delete[] kfd_tracer_array;
 		}
 		if (hip_api_trace)
 		{
+			nb_events = nb_events + hip_api_tracer->get_nb_events();
 			delete hip_api_tracer;
 		}
 		if (hip_activity_trace)
 		{
+			nb_events = nb_events + hip_activity_tracer->get_nb_events();
 			delete hip_activity_tracer;
 		}
 	}
-	barectf_platform_linux_fs_fini(tables_platform_ctx);
+	if(!associations_stream_exists){
+		barectf_platform_linux_fs_fini(tables_platform_ctx);
+	}
+	write_nb_events();
 }
 
 //Functions that will be loaded in tool files and call tracing methodes

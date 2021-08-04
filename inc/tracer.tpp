@@ -36,6 +36,7 @@
 template <typename event_T>
 Tracer<event_T>::Tracer(const char *prefix, const char *suffix)
 {
+	nb_events=0;
 	output_prefix = prefix;
 	my_pid = GetPid();
 	trace_suffix = suffix;
@@ -110,6 +111,13 @@ void Tracer<event_T>::add_queue()
 	queue_array = queue_array2;
 };
 
+//Function that return the number of events traced by the tracer
+template <typename event_T>
+uint64_t Tracer<event_T>::get_nb_events()
+{
+	return nb_events;
+};
+
 /*Callback function that is called when a new event is encountered
  *begin : timestamp of the event
  *function : tracing function used to write the event
@@ -118,6 +126,7 @@ void Tracer<event_T>::add_queue()
 template <typename event_T>
 void Tracer<event_T>::callback(uint64_t begin, tracing_function function, event_T *new_event)
 {
+	nb_events++;
 	uint32_t i = 0;
 	while (i < size)
 	{

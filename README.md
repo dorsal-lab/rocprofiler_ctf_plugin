@@ -15,6 +15,10 @@ To generate CTF traces you need to run the rocprof command with the --ctf-format
 
 ```rocprof --ctf-format --hsa-trace -d my_traces my_program```
 
+Finally, to compute and write the offsets of the trace and the number of events in the metadata file, you must run the post_processing.py python script located in the ```scripts``` directory with the trace directory as argument:
+```
+$CTF_PLUGIN/scripts/post_processing.py my_traces
+```
 
 ## Informations about the generated traces
 

@@ -1294,8 +1294,8 @@ extern "C" DESTRUCTOR_API void destructor() {
   if(ctf_plugin){
     unload_ctf_lib();
     dlclose(dl_handle);
-  }  
-  
+  }
+
   roctracer_unload();
   ONLOAD_TRACE_END();
   
