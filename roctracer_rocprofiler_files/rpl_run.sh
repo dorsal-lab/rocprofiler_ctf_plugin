@@ -23,7 +23,7 @@
 ################################################################################
 
 time_stamp=`date +%y%m%d_%H%M%S`
-BIN_DIR=$(dirname $(realpath $0))
+BIN_DIR=$(dirname $(realpath ${BASH_SOURCE[0]}))
 PKG_DIR=$(dirname $BIN_DIR)
 ROOT_DIR=$(dirname $PKG_DIR)
 TT_DIR=$ROOT_DIR/roctracer
@@ -34,6 +34,11 @@ DATA_DIR="rpl_data_${time_stamp}_$$"
 RPL_PATH=$PKG_DIR/lib
 TLIB_PATH=$PKG_DIR/tool
 TTLIB_PATH=$TT_DIR/tool
+ROCM_LIB_PATH=$ROOT_DIR/lib
+
+GFX=`/opt/rocm/bin/rocm_agent_enumerator | tail -1`
+
+SPM_COUNTERS_FILE="spm_counters.txt"
 
 if [ -z "$ROCP_PYTHON_VERSION" ] ; then
   ROCP_PYTHON_VERSION=python3
@@ -76,6 +81,8 @@ export ROCP_METRICS=$PKG_DIR/lib/metrics.xml
 export AQLPROFILE_READ_API=0
 # ROC Profiler package path
 export ROCP_PACKAGE_DIR=$PKG_DIR
+# enabled SPM KFD mode
+export ROCP_SPM_KFD_MODE=1
 
 # error handling
 fatal() {
@@ -158,7 +165,7 @@ usage() {
   echo "  --ctx-wait <on|off> - to wait for outstanding contexts on profiler exit [on]"
   echo "  --ctx-limit <max number> - maximum number of outstanding contexts [0 - unlimited]"
   echo "  --heartbeat <rate sec> - to print progress heartbeats [0 - disabled]"
-  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [off]"
+  echo "  --obj-tracking <on|off> - to turn on/off kernels code objects tracking [on]"
   echo "    To support V3 code object"
   echo ""
   echo "  --stats - generating kernel execution stats, file <output name>.stats.csv"
@@ -206,12 +213,30 @@ usage() {
 }
 
 # checking for availability of rocminfo utility
-`which rocminfo >/dev/null 2>&1`
-if [ $? != 0 ]; then error "'rocminfo' utility is not found: please add ROCM bin path to PATH env var."; fi
+if !command -v rocminfo > /dev/null 2>&1 ;  then
+  error "'rocminfo' utility is not found: please add ROCM bin path to PATH env var.";
+fi
+
+# setting ROCM_LIB_PATH
+set_rocm_lib_path() {
+
+  for ROCM_LIB_PATH in "$ROOT_DIR/lib" "$ROOT_DIR/lib64" ; do
+     if [ -f "$ROCM_LIB_PATH/libhsakmt.so.1" ]; then
+        return 0
+     fi
+  done
+
+  #error
+  return 255 #FF
+}
 
 # profiling run method
 OUTPUT_LIST=""
 run() {
+    if ! set_rocm_lib_path ; then
+     echo " Fatal could not find libhsakmt "
+     fatal
+  fi
   export ROCP_INPUT="$1"
   OUTPUT_DIR="$2"
   shift
@@ -257,7 +282,7 @@ run() {
   fi
   if [ "$KFD_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":kfd"
-    MY_LD_PRELOAD="$TT_DIR/lib/libkfdwrapper64.so libhsakmt.so.1 $MY_LD_PRELOAD"
+    MY_LD_PRELOAD="$TT_DIR/lib/libkfdwrapper64.so $ROCM_LIB_PATH/libhsakmt.so.1 $MY_LD_PRELOAD"
   fi
   if [ "$HIP_TRACE" = 1 ] ; then
     API_TRACE=${API_TRACE}":hip"
@@ -459,10 +484,6 @@ while [ 1 ] ; do
     ARG_VAL=0
     export ROCP_K_CONCURRENT=1
     export AQLPROFILE_READ_API=1
-  elif [ "$1" = "--spm-mode" ] ; then
-    if [ "$2" = "on" ] ; then
-      export ROCP_SPM_KFD_MODE=1
-    fi
   elif [ "$1" = "--verbose" ] ; then
     ARG_VAL=0
     export ROCP_VERBOSE_MODE=1
@@ -567,6 +588,10 @@ for name in $input_list; do
     break
   fi
 done
+
+if [ -e "$SPM_COUNTERS_FILE" ] ; then
+  $ROCP_PYTHON_VERSION $BIN_DIR/spmltgen.py $GFX -f $SPM_COUNTERS_FILE
+fi
 
 if [ -n "$csv_output" ] ; then
   merge_output $OUTPUT_LIST

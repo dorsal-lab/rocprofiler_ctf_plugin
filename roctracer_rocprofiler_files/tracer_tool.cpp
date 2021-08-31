@@ -328,6 +328,7 @@ constexpr roctracer::TraceBuffer<hsa_api_trace_entry_t>::flush_prm_t hsa_flush_p
 roctracer::TraceBuffer<hsa_api_trace_entry_t>* hsa_api_trace_buffer = NULL;
 
 // HSA API callback function
+
 void hsa_api_callback(
     uint32_t domain,
     uint32_t cid,
@@ -339,6 +340,7 @@ void hsa_api_callback(
   if (data->phase == ACTIVITY_API_PHASE_ENTER) {
     hsa_begin_timestamp = timer->timestamp_fn_ns();
   } else {
+
     const timestamp_t end_timestamp = (cid == HSA_API_ID_hsa_shut_down) ? hsa_begin_timestamp : timer->timestamp_fn_ns();
     hsa_api_trace_entry_t* entry = hsa_api_trace_buffer->GetEntry();
     entry->cid = cid;
@@ -1133,7 +1135,6 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
         uint32_t cid = HSA_API_ID_NUMBER;
         const char* api = hsa_api_vec[i].c_str();
         ROCTRACER_CALL(roctracer_op_code(ACTIVITY_DOMAIN_HSA_API, api, &cid, NULL));
-		printf("%d \n", i);
         ROCTRACER_CALL(roctracer_enable_op_callback(ACTIVITY_DOMAIN_HSA_API, cid, hsa_api_callback, NULL));
         printf(" %s", api);
       }
@@ -1145,17 +1146,17 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
 
   // Enable HSA GPU activity
   if (trace_hsa_activity) {
-	if(!ctf_plugin){
-		hsa_async_copy_file_handle = open_output_file(output_prefix, "async_copy_trace.txt");
-		hsa_activity_callback_wrapper = hsa_activity_callback;
-	}else{
-		load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_HSA_OPS, NULL);
-		hsa_activity_callback_wrapper = (void (*)(uint32_t op, activity_record_t* record, void* arg))dlsym(dl_handle, "hsa_activity_callback");
-		if (!hsa_activity_callback_wrapper) {
-			printf("error: %s\n", dlerror());
-			abort();		
-		}
-	}	  
+    if(!ctf_plugin){
+      hsa_async_copy_file_handle = open_output_file(output_prefix, "async_copy_trace.txt");
+      hsa_activity_callback_wrapper = hsa_activity_callback;
+    }else{
+      load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_HSA_OPS, NULL);
+      hsa_activity_callback_wrapper = (void (*)(uint32_t op, activity_record_t* record, void* arg))dlsym(dl_handle, "hsa_activity_callback");
+      if (!hsa_activity_callback_wrapper) {
+        printf("error: %s\n", dlerror());
+        abort();		
+      }
+    }	  
 	
     // initialize HSA tracing
     roctracer::hsa_ops_properties_t ops_properties {
@@ -1298,5 +1299,4 @@ extern "C" DESTRUCTOR_API void destructor() {
 
   roctracer_unload();
   ONLOAD_TRACE_END();
-  
 }
