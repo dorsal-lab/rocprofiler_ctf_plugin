@@ -117,9 +117,6 @@ uint32_t kfd_api_vec_size=0;
 char** kfd_api_vec;
 uint32_t hip_api_vec_size=0;
 char** hip_api_vec;
-//std::vector<std::string> hsa_api_vec;
-//std::vector<std::string> kfd_api_vec;
-//std::vector<std::string> hip_api_vec;
 
 LOADER_INSTANTIATE();
 TRACE_BUFFER_INSTANTIATE();
@@ -979,7 +976,6 @@ void tool_load() {
       if (name == "HSA") {
         found = true;
         trace_hsa_api = true;
-		//hsa_api_vec = api_vec;
         hsa_api_vec = (char**)malloc(api_vec.size() * sizeof(char*));
 		hsa_api_vec_size = api_vec.size();
 		for(uint64_t i = 0 ; i < api_vec.size(); i++){
@@ -994,7 +990,6 @@ void tool_load() {
         found = true;
         trace_hip_api = true;
         trace_hip_activity = true;
-        //hip_api_vec = api_vec;
         hip_api_vec = (char**)malloc(api_vec.size() * sizeof(char*));
 		hip_api_vec_size = api_vec.size();
 		for(uint64_t i = 0 ; i < api_vec.size(); i++){
@@ -1004,7 +999,6 @@ void tool_load() {
       if (name == "KFD") {
         found = true;
         trace_kfd = true;
-        //kfd_api_vec = api_vec;
 		kfd_api_vec = (char**)malloc(api_vec.size() * sizeof(char*));
 		kfd_api_vec_size = api_vec.size();
 		for(uint64_t i = 0 ; i < api_vec.size(); i++){
