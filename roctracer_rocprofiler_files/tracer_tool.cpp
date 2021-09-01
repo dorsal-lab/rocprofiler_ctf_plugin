@@ -111,9 +111,15 @@ bool trace_hip_activity = false;
 bool trace_kfd = false;
 bool trace_pcs = false;
 // API trace vector
-std::vector<std::string> hsa_api_vec;
-std::vector<std::string> kfd_api_vec;
-std::vector<std::string> hip_api_vec;
+uint32_t hsa_api_vec_size=0;
+char** hsa_api_vec;
+uint32_t kfd_api_vec_size=0;
+char** kfd_api_vec;
+uint32_t hip_api_vec_size=0;
+char** hip_api_vec;
+//std::vector<std::string> hsa_api_vec;
+//std::vector<std::string> kfd_api_vec;
+//std::vector<std::string> hip_api_vec;
 
 LOADER_INSTANTIATE();
 TRACE_BUFFER_INSTANTIATE();
@@ -741,6 +747,7 @@ std::string normalize_token(const std::string& token, bool not_empty, const std:
   return (norm_len != 0) ? token.substr(first_pos, norm_len) : std::string("");
 }
 
+
 int get_xml_array(const xml::Xml::level_t* node, const std::string& field, const std::string& delim, std::vector<std::string>* vec, const char* label = NULL) {
   int parse_iter = 0;
   const auto& opts = node->opts;
@@ -972,7 +979,12 @@ void tool_load() {
       if (name == "HSA") {
         found = true;
         trace_hsa_api = true;
-        hsa_api_vec = api_vec;
+		//hsa_api_vec = api_vec;
+        hsa_api_vec = (char**)malloc(api_vec.size() * sizeof(char*));
+		hsa_api_vec_size = api_vec.size();
+		for(uint64_t i = 0 ; i < api_vec.size(); i++){
+			hsa_api_vec[i] = strdup(api_vec[i].c_str());
+		}
       }
       if (name == "GPU") {
         found = true;
@@ -982,12 +994,22 @@ void tool_load() {
         found = true;
         trace_hip_api = true;
         trace_hip_activity = true;
-        hip_api_vec = api_vec;
+        //hip_api_vec = api_vec;
+        hip_api_vec = (char**)malloc(api_vec.size() * sizeof(char*));
+		hip_api_vec_size = api_vec.size();
+		for(uint64_t i = 0 ; i < api_vec.size(); i++){
+			hip_api_vec[i] = strdup(api_vec[i].c_str());
+		}
       }
       if (name == "KFD") {
         found = true;
         trace_kfd = true;
-        kfd_api_vec = api_vec;
+        //kfd_api_vec = api_vec;
+		kfd_api_vec = (char**)malloc(api_vec.size() * sizeof(char*));
+		kfd_api_vec_size = api_vec.size();
+		for(uint64_t i = 0 ; i < api_vec.size(); i++){
+			kfd_api_vec[i] = strdup(api_vec[i].c_str());
+		}
       }
     }
 
@@ -1077,10 +1099,10 @@ void tool_load() {
     roctracer_set_properties(ACTIVITY_DOMAIN_KFD_API, NULL);
 
     printf("    KFD-trace(");
-    if (kfd_api_vec.size() != 0) {
-      for (unsigned i = 0; i < kfd_api_vec.size(); ++i) {
+    if (kfd_api_vec_size != 0) {
+      for (unsigned i = 0; i < kfd_api_vec_size; ++i) {
         uint32_t cid = KFD_API_ID_NUMBER;
-        const char* api = kfd_api_vec[i].c_str();
+        const char* api = kfd_api_vec[i];
         ROCTRACER_CALL(roctracer_op_code(ACTIVITY_DOMAIN_KFD_API, api, &cid, NULL));
         ROCTRACER_CALL(roctracer_enable_op_callback(ACTIVITY_DOMAIN_KFD_API, cid, kfd_api_callback_wrapper, NULL));
         printf(" %s", api);
@@ -1130,10 +1152,10 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
     roctracer_set_properties(ACTIVITY_DOMAIN_HSA_API, (void*)table);
 
     fprintf(stdout, "    HSA-trace("); fflush(stdout);
-    if (hsa_api_vec.size() != 0) {
-      for (unsigned i = 0; i < hsa_api_vec.size(); ++i) {
+    if (hsa_api_vec_size != 0) {
+      for (unsigned i = 0; i < hsa_api_vec_size; ++i) {
         uint32_t cid = HSA_API_ID_NUMBER;
-        const char* api = hsa_api_vec[i].c_str();
+        const char* api = hsa_api_vec[i];
         ROCTRACER_CALL(roctracer_op_code(ACTIVITY_DOMAIN_HSA_API, api, &cid, NULL));
         ROCTRACER_CALL(roctracer_enable_op_callback(ACTIVITY_DOMAIN_HSA_API, cid, hsa_api_callback, NULL));
         printf(" %s", api);
@@ -1199,10 +1221,10 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
         }		
       }		
       
-      if (hip_api_vec.size() != 0) {
-        for (unsigned i = 0; i < hip_api_vec.size(); ++i) {
+      if (hip_api_vec_size != 0) {
+        for (unsigned i = 0; i < hip_api_vec_size; ++i) {
           uint32_t cid = HIP_API_ID_NUMBER;
-          const char* api = hip_api_vec[i].c_str();
+          const char* api = hip_api_vec[i];
           ROCTRACER_CALL(roctracer_op_code(ACTIVITY_DOMAIN_HIP_API, api, &cid, NULL));
           ROCTRACER_CALL(roctracer_enable_op_callback(ACTIVITY_DOMAIN_HIP_API, cid, hip_api_callback, NULL));
           printf(" %s", api);
