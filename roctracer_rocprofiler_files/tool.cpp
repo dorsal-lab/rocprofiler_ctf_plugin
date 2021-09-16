@@ -155,9 +155,9 @@ uint32_t my_pid = GetPid();
 
 //Plugins objects
 void* dl_handle;
-void (*init_kernel_ctf_tracing)(const char*, std::vector<std::string>, uint32_t);
-void (*unload_kernel_tracing)();
-bool ctf_plugin = false;
+void (*load_profiler_plugin)(const char*, std::vector<std::string>);
+void (*unload_profiler_plugin)();
+bool output_plugin_enabled = false;
 
 // Error handler
 void fatal(const std::string msg) {
@@ -339,25 +339,38 @@ struct trace_data_arg_t {
   hsa_agent_t agent;
 };
 
+struct metric_trace_entry_t {
+	uint32_t dispatch;
+	char* name;
+	uint64_t result;
+};
 // Align to specified alignment
 unsigned align_size(unsigned size, unsigned alignment) {
   return ((size + alignment - 1) & ~(alignment - 1));
 }
 
+void (*write_metric_wrapper)(metric_trace_entry_t *entry);
+void write_metric(metric_trace_entry_t *entry){
+	fprintf(result_file_handle, "  %s ", entry->name);
+	fprintf(result_file_handle, "(%lu)\n", entry->result);
+}
+
 // Output profiling results for input features
 void output_results(const context_entry_t* entry, const char* label) {
-  FILE* file = entry->file_handle;
+  //FILE* file = entry->file_handle;
   const rocprofiler_feature_t* features = entry->features;
   const unsigned feature_count = entry->feature_count;
 
   for (unsigned i = 0; i < feature_count; ++i) {
     const rocprofiler_feature_t* p = &features[i];
-    fprintf(file, "  %s ", p->name);
     switch (p->data.kind) {
       // Output metrics results
-      case ROCPROFILER_DATA_KIND_INT64:
-        fprintf(file, "(%lu)\n", p->data.result_int64);
+      case ROCPROFILER_DATA_KIND_INT64:{
+		metric_trace_entry_t metric_trace_entry = {entry->index, strdup(p->name), p->data.result_int64};
+		write_metric_wrapper(&metric_trace_entry);
+		free(metric_trace_entry.name);
         break;
+	  }
       default:
         fprintf(stderr, "RPL-tool: undefined data kind(%u)\n", p->data.kind);
         abort();
@@ -378,44 +391,57 @@ void output_group(const context_entry_t* entry, const char* label) {
   }
 }
 
-void (*write_context_entry_wrapper)(context_entry_t*, const rocprofiler_dispatch_record_t*, const std::string, const AgentInfo*);
-void write_context_entry(context_entry_t* entry,const rocprofiler_dispatch_record_t* record, const std::string nik_name, const AgentInfo* agent_info){
-	FILE* file_handle = entry->file_handle;
-	fprintf(file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
-	  entry->index,
-	  agent_info->dev_index,
-	  entry->data.queue_id,
-	  entry->data.queue_index,
-	  my_pid,
-	  entry->data.thread_id,
-	  entry->kernel_properties.grid_size,
-	  entry->kernel_properties.workgroup_size,
-	  (entry->kernel_properties.lds_size + (AgentInfo::lds_block_size - 1)) & ~(AgentInfo::lds_block_size - 1),
-	  entry->kernel_properties.scratch_size,
-	  (entry->kernel_properties.vgpr_count + 1) * agent_info->vgpr_block_size,
-	  (entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size,
-	  entry->kernel_properties.fbarrier_count,
-	  entry->kernel_properties.signal.handle,
-	  entry->kernel_properties.object,
-	  nik_name.c_str());
-	if (record) fprintf(file_handle, ", time(%lu,%lu,%lu,%lu)",
-	  record->dispatch,
-	  record->begin,
-	  record->end,
-	  record->complete);
-	fprintf(file_handle, "\n");
-	fflush(file_handle);
+struct kernel_trace_entry_t {
+	uint32_t dispatch;
+	uint32_t gpu_id;
+	uint32_t queue_id;
+	uint64_t queue_index;
+	uint32_t pid;
+	uint32_t tid;
+	uint32_t grid_size;
+	uint32_t workgroup_size;
+	uint32_t lds_size;
+	uint32_t scratch_size;
+	uint32_t vgpr;
+	uint32_t sgpr;
+	uint32_t fbarrier_count;
+	uint64_t signal_handle;
+	uint64_t object;
+	char* kernel_name;
+	bool record;
+	uint64_t dispatch_time;
+	uint64_t begin;
+	uint64_t end;
+	uint64_t complete;
+};
+
+void (*write_context_entry_wrapper)(kernel_trace_entry_t *entry);
+void write_context_entry(kernel_trace_entry_t *entry){
+	fprintf(result_file_handle, "dispatch[%u], gpu-id(%u), queue-id(%u), queue-index(%lu), pid(%u), tid(%u), grd(%u), wgr(%u), lds(%u), scr(%u), vgpr(%u), sgpr(%u), fbar(%u), sig(0x%lx), obj(0x%lx), kernel-name(\"%s\")",
+	  entry->dispatch,
+	  entry->gpu_id,
+	  entry->queue_id,
+	  entry->queue_index,
+	  entry->pid,
+	  entry->tid,
+	  entry->grid_size,
+	  entry->workgroup_size,
+	  entry->lds_size,
+	  entry->scratch_size,
+	  entry->vgpr,
+	  entry->sgpr,
+	  entry->fbarrier_count,
+	  entry->signal_handle,
+	  entry->object,
+	  entry->kernel_name);
+	if (entry->record) fprintf(result_file_handle, ", time(%lu,%lu,%lu,%lu)",
+	  entry->dispatch_time,
+	  entry->begin,
+	  entry->end,
+	  entry->complete);
+	fprintf(result_file_handle, "\n");
+	fflush(result_file_handle);
 }
-
-void (*write_group_wrapper)(const context_entry_t*, const char*);
-void write_group(const context_entry_t* entry, const char* label){
-	output_group(entry, "group0-data");
-};
-
-void (*write_metrics_wrapper)(const context_entry_t*, const char*);
-void write_metrics(const context_entry_t* entry, const char* label){
-	output_results(entry, label);
-};
 
 // Dump stored context entry
 bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
@@ -437,7 +463,29 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
   if (index != UINT32_MAX) {
     const std::string nik_name = (to_truncate_names == 0) ? entry->data.kernel_name : filtr_kernel_name(entry->data.kernel_name);
     const AgentInfo* agent_info = HsaRsrcFactory::Instance().GetAgentInfo(entry->agent);
-    write_context_entry_wrapper(entry, record, nik_name, agent_info);
+	kernel_trace_entry_t kernel_trace_entry = {entry->index,
+		agent_info->dev_index,
+		entry->data.queue_id,
+		entry->data.queue_index, 
+		my_pid,
+		entry->data.thread_id,
+		entry->kernel_properties.grid_size,
+		entry->kernel_properties.workgroup_size,
+		(entry->kernel_properties.lds_size + (AgentInfo::lds_block_size - 1)) & ~(AgentInfo::lds_block_size - 1),
+		entry->kernel_properties.scratch_size,
+		(entry->kernel_properties.vgpr_count + 1) * agent_info->vgpr_block_size,
+		(entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size,
+		entry->kernel_properties.fbarrier_count,
+		entry->kernel_properties.signal.handle,
+		entry->kernel_properties.object,
+		strdup(nik_name.c_str()),
+		record != NULL ? true : false,
+		record != NULL ? record->dispatch: 0,
+		record != NULL ? record->begin : 0,
+		record != NULL ? record->end : 0,
+		record != NULL ? record->complete : 0};
+    write_context_entry_wrapper(&kernel_trace_entry);
+	free(kernel_trace_entry.kernel_name);
   }
   if (record && to_clean) {
     delete record;
@@ -449,14 +497,14 @@ bool dump_context_entry(context_entry_t* entry, bool to_clean = true) {
     if (entry->feature_count > 0) {
       status = rocprofiler_group_get_data(&group);
       check_status(status);
-      if (verbose == 1) write_group_wrapper(entry, "group0-data");
+      if (verbose == 1) output_group(entry, "group0-data");
 
       status = rocprofiler_get_metrics(group.context);
       check_status(status);
     }
     std::ostringstream oss;
     oss << index << "__" << filtr_kernel_name(entry->data.kernel_name);
-    write_metrics_wrapper(entry, oss.str().substr(0, KERNEL_NAME_LEN_MAX).c_str());
+    output_results(entry, oss.str().substr(0, KERNEL_NAME_LEN_MAX).c_str());
     if (to_clean) free(const_cast<char*>(entry->data.kernel_name));
 
     // Finishing cleanup
@@ -979,11 +1027,11 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
     rcfile = xml::Xml::Create(rcpath);
   }
   
-  //Load CTF_LIB if enabled
-  const char* ctf_format = getenv("CTF_FORMAT");
-  if(ctf_format != NULL){
-	  if (std::string(ctf_format).find("enabled") != std::string::npos) {
-		ctf_plugin = true;
+  //Load output plugin if enabled
+  const char* output_plugin = getenv("OUTPUT_PLUGIN");
+  if(output_plugin != NULL){
+	  if (std::string(output_plugin).find("enabled") != std::string::npos) {
+		output_plugin_enabled = true;
 		const char* plugin_lib = getenv("ROCPROFILER_PLUGIN_LIB");
 		if(plugin_lib){  
 			dl_handle = dlopen(plugin_lib, RTLD_LAZY);
@@ -992,29 +1040,24 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
 				abort();
 			}
 			
-			init_kernel_ctf_tracing = (void (*)(const char* prefix, std::vector<std::string> metrics_vector, uint32_t verbose))dlsym(dl_handle, "init_kernel_ctf_tracing");  
-			if (!init_kernel_ctf_tracing) {
+			load_profiler_plugin = (void (*)(const char* prefix, std::vector<std::string> metrics_vector))dlsym(dl_handle, "load_profiler_plugin");  
+			if (!load_profiler_plugin) {
 				printf("error: %s\n", dlerror());
 				abort();
 			}
-			write_context_entry_wrapper = (void (*)(context_entry_t* entry,const rocprofiler_dispatch_record_t* record, const std::string nik_name, const AgentInfo* agent_info))dlsym(dl_handle, "write_context_entry");  
+			write_context_entry_wrapper = (void (*)(kernel_trace_entry_t *entry))dlsym(dl_handle, "write_context_entry");  
 			if (!write_context_entry_wrapper) {
 				printf("error: %s\n", dlerror());
 				abort();
 			}
-			write_group_wrapper = (void (*)(const context_entry_t* entry, const char* label))dlsym(dl_handle, "write_group");  
-			if (!write_group_wrapper) {
-				printf("error: %s\n", dlerror());
-				abort();
-			}
-			write_metrics_wrapper = (void (*)(const context_entry_t* entry, const char* label))dlsym(dl_handle, "write_metrics");  
-			if (!write_metrics_wrapper) {
+			write_metric_wrapper = (void (*)(metric_trace_entry_t *entry))dlsym(dl_handle, "write_metric");  
+			if (!write_metric_wrapper) {
 				printf("error: %s\n", dlerror());
 				abort();
 			}			
 			
-			unload_kernel_tracing = (void (*)())dlsym(dl_handle, "unload_kernel_tracing");
-			if (!unload_kernel_tracing) {
+			unload_profiler_plugin = (void (*)())dlsym(dl_handle, "unload_profiler_plugin");
+			if (!unload_profiler_plugin) {
 				printf("error: %s\n", dlerror());
 				abort();	
 			}			
@@ -1024,10 +1067,9 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
   }
 
 	
-  if(!ctf_plugin){
+  if(!output_plugin_enabled){
 	write_context_entry_wrapper = write_context_entry;
-	write_group_wrapper = write_group;
-	write_metrics_wrapper = write_metrics;
+	write_metric_wrapper = write_metric;
   }  
   
   if (rcfile != NULL) {
@@ -1119,7 +1161,7 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
       perror(errmsg.str().c_str());
       abort();
     }
-    if(!ctf_plugin){
+    if(!output_plugin_enabled){
       std::ostringstream oss;
       oss << result_prefix << "/" << GetPid() << "_results.txt";
       result_file_handle = fopen(oss.str().c_str(), "w");
@@ -1160,8 +1202,8 @@ extern "C" PUBLIC_API void OnLoadToolProp(rocprofiler_settings_t* settings)
     }
   }
   
-  if(ctf_plugin){
-	  init_kernel_ctf_tracing(result_prefix, metrics_vec, verbose);
+  if(output_plugin_enabled){
+	  load_profiler_plugin(result_prefix, metrics_vec);
   }
 
   // Getting GPU indexes
@@ -1344,8 +1386,8 @@ void rocprofiler_unload(bool is_destr) {
   delete context_array;
   context_array = NULL;
   
-  if(ctf_plugin){
-	unload_kernel_tracing();
+  if(output_plugin_enabled){
+	unload_profiler_plugin();
 	dlclose(dl_handle);
   }
   ONLOAD_TRACE_END();

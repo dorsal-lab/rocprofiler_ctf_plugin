@@ -20,6 +20,16 @@ trace:
         $default-clock-type-name: default
 
         event-record-types:
+          roctx:
+            payload-field-type:
+              class: structure
+              members:
+                - cid: uint32
+                - pid: uint32
+                - tid: uint32
+                - rid: uint64
+                - message: string
+
           hsa_api:
             payload-field-type:
               class: structure

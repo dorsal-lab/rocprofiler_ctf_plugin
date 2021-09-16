@@ -27,22 +27,62 @@
 #ifndef ROCTRACER_TRACERS_H_
 #define ROCTRACER_TRACERS_H_
 
+#include <atomic>
 #include "tracer.h"
 #include "roctracer_hsa_aux.h"
 #include "roctracer_hip_aux.h"
 #include "roctracer_kfd_aux.h"
+#include <roctracer_roctx.h>
 #include "hsa_args_str.h"
 #include "kfd_args_str.h"
 #include "hip_args_str.h"
 
-#include "core/trace_buffer.h"
+enum entry_type_t {
+  DFLT_ENTRY_TYPE = 0,
+  API_ENTRY_TYPE = 1,
+  COPY_ENTRY_TYPE = 2,
+  KERNEL_ENTRY_TYPE = 3,
+  NUM_ENTRY_TYPE = 4
+};
+
+//rocTX API tracing structures
+typedef uint64_t roctx_range_id_t;
+
+struct roctx_trace_entry_t {
+  std::atomic<uint32_t> valid;
+  entry_type_t type;
+  uint32_t cid;
+  timestamp_t time;
+  uint32_t pid;
+  uint32_t tid;
+  roctx_range_id_t rid;
+  const char* message;
+};
+
+struct roctx_event_t : event_t
+{
+	uint32_t tid;
+	uint32_t cid;
+	uint32_t pid;
+	roctx_range_id_t rid;
+	const char* message;
+	roctx_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, roctx_range_id_t rid_s, const char* message_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), rid(rid_s), message(message_s){}
+};
+
+class rocTX_Tracer : public Tracer<roctx_event_t>
+{
+public:
+	rocTX_Tracer(const char *prefix, const char *suffix) : Tracer<roctx_event_t>(prefix, suffix) {}
+	~rocTX_Tracer() {}
+	void roctx_flush_cb(roctx_trace_entry_t *entry);
+};
 
 //HSA API tracing structures
 
 struct hsa_api_trace_entry_t
 {
 	std::atomic<uint32_t> valid;
-	roctracer::entry_type_t type;
+	entry_type_t type;
 	uint32_t cid;
 	timestamp_t begin;
 	timestamp_t end;
@@ -91,6 +131,17 @@ public:
 };
 
 //KFD API tracing structures
+struct kfd_api_trace_entry_t {
+  std::atomic<uint32_t> valid;
+  entry_type_t type;
+  uint32_t domain;
+  uint32_t cid;
+  timestamp_t begin;
+  timestamp_t end;
+  uint32_t pid;
+  uint32_t tid;
+  kfd_api_data_t data;
+};
 
 struct kfd_api_event_t : event_t
 {
@@ -107,7 +158,7 @@ class KFD_API_Tracer : public Tracer<kfd_api_event_t>
 public:
 	KFD_API_Tracer(const char *prefix, const char *suffix) : Tracer<kfd_api_event_t>(prefix, suffix) {}
 	~KFD_API_Tracer() {}
-	void kfd_api_flush_cb(uint64_t begin, uint64_t end, uint32_t cid, const kfd_api_data_t *data, uint32_t tid, uint32_t pid);
+	void kfd_api_flush_cb(kfd_api_trace_entry_t *entry);
 };
 
 //HIP API tracing structures
@@ -115,7 +166,7 @@ public:
 struct hip_api_trace_entry_t
 {
 	std::atomic<uint32_t> valid;
-	roctracer::entry_type_t type;
+	entry_type_t type;
 	uint32_t domain;
 	uint32_t cid;
 	timestamp_t begin;
@@ -135,7 +186,8 @@ struct hip_api_event_t : event_t
 	hip_api_data_t data;
 	const char *name;
 	uint64_t end;
-	hip_api_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, hip_api_data_t data_s, const char *name_s, uint64_t end_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), data(data_s), name(name_s), end(end_s) {}
+	uint32_t domain;
+	hip_api_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, hip_api_data_t data_s, const char *name_s, uint64_t end_s, uint32_t domain_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), data(data_s), name(name_s), end(end_s), domain(domain_s) {}
 };
 
 class HIP_API_Tracer : public Tracer<hip_api_event_t>
@@ -163,6 +215,7 @@ public:
 	void hip_activity_callback(const roctracer_record_t *record, const char *name);
 };
 
+void trace_roctx(roctx_event_t *roctx_event, struct barectf_default_ctx *ctx);
 void trace_hip_activity(hip_activity_event_t *hip_activity_event, struct barectf_default_ctx *ctx);
 void trace_hip_api(hip_api_event_t *hip_api_event, struct barectf_default_ctx *ctx);
 void trace_kfd_api(kfd_api_event_t *kfd_event, struct barectf_default_ctx *ctx);

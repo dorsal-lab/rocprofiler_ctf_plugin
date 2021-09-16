@@ -168,12 +168,11 @@ static inline const char* cxx_demangle(const char* symbol) {
   return (ret != NULL) ? ret : strdup(symbol);
 }
 
-//CTF plugin objects
-bool ctf_plugin = false;
+//Output plugin objects
+bool output_plugin_enabled = false;
 void* dl_handle;
-void (*load_ctf_lib)(const char*, activity_domain_t, void*);
-void (*flush_ctf)();
-void (*unload_ctf_lib)();
+void (*load_tracer_plugin)(const char*, activity_domain_t);
+void (*unload_plugin_lib)();
 
 // Tracing control thread
 uint32_t control_delay_us = 0;
@@ -243,9 +242,18 @@ struct roctx_trace_entry_t {
   roctx_range_id_t rid;
   const char* message;
 };
-
 void roctx_flush_cb(roctx_trace_entry_t* entry);
-constexpr roctracer::TraceBuffer<roctx_trace_entry_t>::flush_prm_t roctx_flush_prm = {roctracer::DFLT_ENTRY_TYPE, roctx_flush_cb};
+void (*roctx_flush_cb_wrapper)(roctx_trace_entry_t* entry);
+void roctx_flush_cb_const_wrapper(roctx_trace_entry_t* entry){
+#if ROCTX_CLOCK_TIME
+  timestamp_t timestamp = 0;
+  HsaRsrcFactory::Instance().GetTimestamp(HsaTimer::TIME_ID_CLOCK_MONOTONIC, entry->time, &timestamp);
+  entry->time = timestamp
+#endif
+	roctx_flush_cb_wrapper(entry);
+};
+
+constexpr roctracer::TraceBuffer<roctx_trace_entry_t>::flush_prm_t roctx_flush_prm = {roctracer::DFLT_ENTRY_TYPE, roctx_flush_cb_const_wrapper};
 roctracer::TraceBuffer<roctx_trace_entry_t>* roctx_trace_buffer = NULL;
 
 // rocTX callback function
@@ -294,14 +302,8 @@ void stop_callback() { roctracer::RocTxLoader::Instance().RangeStackIterate(roct
 
 // rocTX buffer flush function
 void roctx_flush_cb(roctx_trace_entry_t* entry) {
-#if ROCTX_CLOCK_TIME
-  timestamp_t timestamp = 0;
-  HsaRsrcFactory::Instance().GetTimestamp(HsaTimer::TIME_ID_CLOCK_MONOTONIC, entry->time, &timestamp);
-#else
-  const timestamp_t timestamp = entry->time;
-#endif
   std::ostringstream os;
-  os << timestamp << " " << entry->pid << ":" << entry->tid << " " << entry->cid << ":" << entry->rid;
+  os << entry->time << " " << entry->pid << ":" << entry->tid << " " << entry->cid << ":" << entry->rid;
   if (entry->message != NULL) os << ":\"" << entry->message << "\"";
   else os << ":\"\"";
   fprintf(roctx_file_handle, "%s\n", os.str().c_str()); fflush(roctx_file_handle);
@@ -696,6 +698,29 @@ void pool_activity_callback(const char* begin, const char* end, void* arg) {
 // KFD API tracing
 
 // KFD API callback function
+struct kfd_api_trace_entry_t {
+  std::atomic<uint32_t> valid;
+  roctracer::entry_type_t type;
+  uint32_t domain;
+  uint32_t cid;
+  timestamp_t begin;
+  timestamp_t end;
+  uint32_t pid;
+  uint32_t tid;
+  kfd_api_data_t data;
+};
+
+
+void kfd_api_flush_cb(kfd_api_trace_entry_t* entry);
+void (*kfd_api_flush_cb_wrapper)(kfd_api_trace_entry_t*);
+void kfd_api_flush_cb_const_wrapper(kfd_api_trace_entry_t* entry){
+	kfd_api_flush_cb_wrapper(entry);
+};
+
+
+constexpr roctracer::TraceBuffer<kfd_api_trace_entry_t>::flush_prm_t kfd_api_flush_prm = {roctracer::DFLT_ENTRY_TYPE, kfd_api_flush_cb_const_wrapper};
+roctracer::TraceBuffer<kfd_api_trace_entry_t>* kfd_api_trace_buffer = NULL;
+
 void (*kfd_api_callback_wrapper)(uint32_t , uint32_t , const void*, void*);
 
 static thread_local bool in_kfd_api_callback = false;
@@ -705,19 +730,30 @@ void kfd_api_callback(
     const void* callback_data,
     void* arg)
 {
-  (void)arg;
-  if (in_kfd_api_callback) return;
-  in_kfd_api_callback = true;
-  const kfd_api_data_t* data = reinterpret_cast<const kfd_api_data_t*>(callback_data);
-  if (data->phase == ACTIVITY_API_PHASE_ENTER) {
-    kfd_begin_timestamp = timer->timestamp_fn_ns();
-  } else {
-    const timestamp_t end_timestamp = timer->timestamp_fn_ns();
-    std::ostringstream os;
-    os << kfd_begin_timestamp << ":" << end_timestamp << " " << GetPid() << ":" << GetTid() << " " << kfd_api_data_pair_t(cid, *data);
-    fprintf(kfd_api_file_handle, "%s\n", os.str().c_str());
-  }
-  in_kfd_api_callback = false;
+	(void)arg;
+	if (in_kfd_api_callback) return;
+	in_kfd_api_callback = true;
+	const kfd_api_data_t* data = reinterpret_cast<const kfd_api_data_t*>(callback_data);
+    if (data->phase == ACTIVITY_API_PHASE_ENTER) {
+		kfd_begin_timestamp = timer->timestamp_fn_ns();
+	} else {
+		const timestamp_t end_timestamp = timer->timestamp_fn_ns();
+		kfd_api_trace_entry_t* entry = kfd_api_trace_buffer->GetEntry();
+		entry->cid = cid;
+		entry->begin = kfd_begin_timestamp;
+		entry->end = end_timestamp;
+		entry->pid = GetPid();
+		entry->tid = GetTid();
+		entry->data = *data;
+		entry->valid.store(roctracer::TRACE_ENTRY_COMPL, std::memory_order_release);
+	}
+	in_kfd_api_callback = false;
+}
+
+void kfd_api_flush_cb(kfd_api_trace_entry_t* entry) {
+  std::ostringstream os;
+  os << entry->begin << ":" << entry->end << " " << entry->pid << ":" << entry->tid << " " << kfd_api_data_pair_t(entry->cid, entry->data);
+  fprintf(kfd_api_file_handle, "%s\n", os.str().c_str());
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -878,11 +914,11 @@ void tool_load() {
     }
   }
   
-  //Load CTF_LIB if enabled
-  const char* ctf_format = getenv("CTF_FORMAT");
-  if(ctf_format != NULL){
-    if (std::string(ctf_format).find("enabled") != std::string::npos) {
-      ctf_plugin = true;
+  //Load output plugin if enabled
+  const char* output_plugin = getenv("OUTPUT_PLUGIN");
+  if(output_plugin != NULL){
+    if (std::string(output_plugin).find("enabled") != std::string::npos) {
+      output_plugin_enabled = true;
       const char* plugin_lib = getenv("ROCTRACER_PLUGIN_LIB");
       if(plugin_lib){  
         dl_handle = dlopen(plugin_lib, RTLD_LAZY);
@@ -891,20 +927,15 @@ void tool_load() {
           abort();
         }
       }else{
-        printf("CTF plugin not found\n");
+        printf("Plugin not found\n");
       }
-      load_ctf_lib = (void (*)(const char* prefix, activity_domain_t domain, void* data))dlsym(dl_handle, "load_ctf_lib");  
-      if (!load_ctf_lib) {
+      load_tracer_plugin = (void (*)(const char* prefix, activity_domain_t domain))dlsym(dl_handle, "load_tracer_plugin");  
+      if (!load_tracer_plugin) {
         printf("error: %s\n", dlerror());
         abort();
       }
-      flush_ctf = (void (*)())dlsym(dl_handle, "flush_ctf");
-      if (!flush_ctf) {
-        printf("error: %s\n", dlerror());
-        abort();
-      }
-      unload_ctf_lib = (void (*)())dlsym(dl_handle, "unload_ctf_lib");
-      if (!unload_ctf_lib) {
+      unload_plugin_lib = (void (*)())dlsym(dl_handle, "unload_plugin_lib");
+      if (!unload_plugin_lib) {
         printf("error: %s\n", dlerror());
         abort();
       }
@@ -1016,8 +1047,17 @@ void tool_load() {
 
   // Enable rpcTX callbacks
   if (trace_roctx) {
-    roctx_file_handle = open_output_file(output_prefix, "roctx_trace.txt");
-
+	if(!output_plugin_enabled){  
+		roctx_file_handle = open_output_file(output_prefix, "roctx_trace.txt");
+		roctx_flush_cb_wrapper = roctx_flush_cb;
+	}else{
+		load_tracer_plugin(output_prefix, ACTIVITY_DOMAIN_ROCTX);
+		roctx_flush_cb_wrapper = (void (*)(roctx_trace_entry_t *))dlsym(dl_handle, "roctx_flush_cb");
+		if (!roctx_flush_cb_wrapper) {
+			printf("error: %s\n", dlerror());
+			abort();
+		}
+	}		
     // initialize HSA tracing
     roctracer_ext_properties_t properties {
       start_callback,
@@ -1078,13 +1118,13 @@ void tool_load() {
 
   // Enable KFD API callbacks/activity
   if (trace_kfd) {
-	if(!ctf_plugin){  
+	if(!output_plugin_enabled){  
 		kfd_api_file_handle = open_output_file(output_prefix, "kfd_api_trace.txt");
-		kfd_api_callback_wrapper = kfd_api_callback;
+		kfd_api_flush_cb_wrapper = kfd_api_flush_cb;
 	}else{
-		load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_KFD_API, (void*)(&timer));
-		kfd_api_callback_wrapper = (void (*)(uint32_t domain, uint32_t cid, const void* callback_data, void* arg))dlsym(dl_handle, "kfd_api_callback");
-		if (!kfd_api_callback_wrapper) {
+		load_tracer_plugin(output_prefix, ACTIVITY_DOMAIN_KFD_API);
+		kfd_api_flush_cb_wrapper = (void (*)(kfd_api_trace_entry_t *))dlsym(dl_handle, "kfd_api_flush_cb");
+		if (!kfd_api_flush_cb_wrapper) {
 			printf("error: %s\n", dlerror());
 			abort();
 		}
@@ -1098,11 +1138,11 @@ void tool_load() {
         uint32_t cid = KFD_API_ID_NUMBER;
         const char* api = kfd_api_vec[i];
         ROCTRACER_CALL(roctracer_op_code(ACTIVITY_DOMAIN_KFD_API, api, &cid, NULL));
-        ROCTRACER_CALL(roctracer_enable_op_callback(ACTIVITY_DOMAIN_KFD_API, cid, kfd_api_callback_wrapper, NULL));
+        ROCTRACER_CALL(roctracer_enable_op_callback(ACTIVITY_DOMAIN_KFD_API, cid, kfd_api_callback, NULL));
         printf(" %s", api);
       }
     } else {
-      ROCTRACER_CALL(roctracer_enable_domain_callback(ACTIVITY_DOMAIN_KFD_API, kfd_api_callback_wrapper, NULL));
+      ROCTRACER_CALL(roctracer_enable_domain_callback(ACTIVITY_DOMAIN_KFD_API, kfd_api_callback, NULL));
     }
     printf(")\n");
   }
@@ -1131,11 +1171,11 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
 
   // Enable HSA API callbacks/activity
   if (trace_hsa_api) {
-    if(!ctf_plugin){
+    if(!output_plugin_enabled){
       hsa_api_file_handle = open_output_file(output_prefix, "hsa_api_trace.txt");
       hsa_api_flush_cb_wrapper = hsa_api_flush_cb;
     }else{
-      load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_HSA_API, NULL);
+      load_tracer_plugin(output_prefix, ACTIVITY_DOMAIN_HSA_API);
       hsa_api_flush_cb_wrapper = (void (*)(hsa_api_trace_entry_t* entry))dlsym(dl_handle, "hsa_api_flush_cb");
       if (!hsa_api_flush_cb_wrapper) {
         printf("error: %s\n", dlerror());
@@ -1162,11 +1202,11 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
 
   // Enable HSA GPU activity
   if (trace_hsa_activity) {
-    if(!ctf_plugin){
+    if(!output_plugin_enabled){
       hsa_async_copy_file_handle = open_output_file(output_prefix, "async_copy_trace.txt");
       hsa_activity_callback_wrapper = hsa_activity_callback;
     }else{
-      load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_HSA_OPS, NULL);
+      load_tracer_plugin(output_prefix, ACTIVITY_DOMAIN_HSA_OPS);
       hsa_activity_callback_wrapper = (void (*)(uint32_t op, activity_record_t* record, void* arg))dlsym(dl_handle, "hsa_activity_callback");
       if (!hsa_activity_callback_wrapper) {
         printf("error: %s\n", dlerror());
@@ -1203,11 +1243,11 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
 
     // Enable tracing
     if (trace_hip_api) {
-      if(!ctf_plugin){
+      if(!output_plugin_enabled){
         hip_api_file_handle = open_output_file(output_prefix, "hip_api_trace.txt");
         hip_api_flush_cb_wrapper = hip_api_flush_cb;
       }else{
-        load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_HIP_API, NULL);
+        load_tracer_plugin(output_prefix, ACTIVITY_DOMAIN_HIP_API);
         hip_api_flush_cb_wrapper = (void (*)(hip_api_trace_entry_t* entry))dlsym(dl_handle, "hip_api_flush_cb");
         if (!hip_api_flush_cb_wrapper) {
           printf("error: %s\n", dlerror());
@@ -1239,11 +1279,11 @@ extern "C" PUBLIC_API bool OnLoad(HsaApiTable* table, uint64_t runtime_version, 
     }
 
     if (trace_hip_activity) {
-		if(!ctf_plugin){
+		if(!output_plugin_enabled){
 			hcc_activity_file_handle = open_output_file(output_prefix, "hcc_ops_trace.txt");
 			hip_activity_callback_wrapper = hip_activity_callback;
 		}else{
-			load_ctf_lib(output_prefix, ACTIVITY_DOMAIN_HCC_OPS, NULL);
+			load_tracer_plugin(output_prefix, ACTIVITY_DOMAIN_HCC_OPS);
 			hip_activity_callback_wrapper = (void (*)(const roctracer_record_t* record,const char * name))dlsym(dl_handle, "hip_activity_callback");
 			if (!hip_activity_callback_wrapper) {
 				printf("error: %s\n", dlerror());
@@ -1293,6 +1333,7 @@ extern "C" CONSTRUCTOR_API void constructor() {
   hip_api_trace_buffer = new roctracer::TraceBuffer<hip_api_trace_entry_t>("HIP API", 0x200000, &hip_api_flush_prm, 1);
   hip_act_trace_buffer = new roctracer::TraceBuffer<hip_act_trace_entry_t>("HIP ACT", 0x200000, &hip_act_flush_prm, 1, 1);
   hsa_api_trace_buffer = new roctracer::TraceBuffer<hsa_api_trace_entry_t>("HSA API", 0x200000, &hsa_flush_prm, 1);
+  kfd_api_trace_buffer = new roctracer::TraceBuffer<kfd_api_trace_entry_t>("KFD API", 0x200000, &kfd_api_flush_prm, 1);
   roctracer_load();
   tool_load();
   ONLOAD_TRACE_END();
@@ -1308,8 +1349,8 @@ extern "C" DESTRUCTOR_API void destructor() {
   if (hip_kernel_stats) hip_kernel_stats->dump();
   if (hip_memcpy_stats) hip_memcpy_stats->dump();
 
-  if(ctf_plugin){
-    unload_ctf_lib();
+  if(output_plugin_enabled){
+    unload_plugin_lib();
     dlclose(dl_handle);
   }
 

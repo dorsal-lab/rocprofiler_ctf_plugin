@@ -46,7 +46,7 @@ struct kernel_event_t : event_t
 	uint32_t fbar;
 	uint64_t sig;
 	uint64_t obj;
-	const char *kernel_name;
+	char *kernel_name;
 	uint64_t dispatch_time;
 	uint64_t complete_time;
 	uint64_t end;
@@ -68,7 +68,7 @@ struct kernel_event_t : event_t
 				   uint32_t fbar_s,
 				   uint64_t sig_s,
 				   uint64_t obj_s,
-				   const char *kernel_name_s,
+				   char *kernel_name_s,
 				   uint64_t dispatch_time_s,
 				   uint64_t complete_time_s,
 				   uint64_t end_s) : event_t(time_s),
@@ -98,7 +98,7 @@ class Kernel_Event_Tracer : public Tracer<kernel_event_t>
 public:
 	Kernel_Event_Tracer(const char *prefix, const char *suffix) : Tracer<kernel_event_t>(prefix, suffix) {}
 	~Kernel_Event_Tracer() {}
-	void write_context_entry(context_entry_t *entry, const rocprofiler_dispatch_record_t *record, const std::string nik_name, const AgentInfo *);
+	void write_context_entry(kernel_trace_entry_t* kernel_trace_entry);
 };
 
 void trace_kernel_event(kernel_event_t *kernel_event, struct barectf_default_ctx *ctx);

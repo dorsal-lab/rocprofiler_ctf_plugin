@@ -55,6 +55,22 @@ static inline const char *cxx_demangle(const char *symbol)
 	const char *ret = (symbol != NULL) ? abi::__cxa_demangle(symbol, NULL, &funcnamesize, &status) : symbol;
 	return (ret != NULL) ? ret : strdup(symbol);
 }
+
+//rocTX tracing function
+void trace_roctx(roctx_event_t *roctx_event, struct barectf_default_ctx *ctx)
+{
+	if(roctx_event->message == NULL){
+		barectf_trace_roctx(ctx, roctx_event->cid, roctx_event->pid, roctx_event->tid, roctx_event->rid, "");
+	}else{
+		barectf_trace_roctx(ctx, roctx_event->cid, roctx_event->pid, roctx_event->tid, roctx_event->rid, roctx_event->message);
+	}
+}
+
+void rocTX_Tracer::roctx_flush_cb(roctx_trace_entry_t *entry)
+{
+	callback(entry->time, (tracing_function)trace_roctx, new roctx_event_t(entry->time, entry->tid, entry->cid, entry->pid, entry->rid, entry->message));
+}
+
 //HSA API tracing function
 void trace_hsa_api(hsa_api_event_t *hsa_api_event, struct barectf_default_ctx *ctx)
 {
@@ -90,30 +106,35 @@ void trace_kfd_api(kfd_api_event_t *kfd_event, struct barectf_default_ctx *ctx)
 	barectf_trace_kfd_api(ctx, kfd_event->cid, kfd_event->pid, kfd_event->tid, arguments.first.c_str(), arguments.second.c_str(), kfd_event->end);
 }
 
-void KFD_API_Tracer::kfd_api_flush_cb(uint64_t begin, uint64_t end, uint32_t cid, const kfd_api_data_t *data, uint32_t tid, uint32_t pid)
+void KFD_API_Tracer::kfd_api_flush_cb(kfd_api_trace_entry_t *entry)
 {
-	callback(begin, (tracing_function)trace_kfd_api, new kfd_api_event_t(begin, tid, cid, pid, *data, end));
+	callback(entry->begin, (tracing_function)trace_kfd_api, new kfd_api_event_t(entry->begin, entry->tid, entry->cid, entry->pid, entry->data, entry->end));
 }
 
 //HIP API tracing function
 void trace_hip_api(hip_api_event_t *hip_api_event, struct barectf_default_ctx *ctx)
 {
-	std::stringstream ss;
-	std::string arguments = hip_api_arguments(hip_api_event->cid, &(hip_api_event->data));
-	ss << arguments;
-	if (is_hip_kernel_launch_api(hip_api_event->cid) && hip_api_event->name)
-	{
-		const char *kernel_name = cxx_demangle(hip_api_event->name);
-		ss << ", " << kernel_name;
+	if(hip_api_event->domain == ACTIVITY_DOMAIN_EXT_API){
+		barectf_trace_hip_api(ctx, UINT32_MAX, hip_api_event->pid, hip_api_event->tid, hip_api_event->name, hip_api_event->end);
+	}else{
+		std::stringstream ss;
+		std::string arguments = hip_api_arguments(hip_api_event->cid, &(hip_api_event->data));
+		ss << arguments;
+		if (is_hip_kernel_launch_api(hip_api_event->cid) && hip_api_event->name)
+		{
+			const char *kernel_name = cxx_demangle(hip_api_event->name);
+			ss << ", " << kernel_name;
+			free((char*) kernel_name);
+		}
+		ss << ", " << (hip_api_event->data).correlation_id;
+		barectf_trace_hip_api(ctx, hip_api_event->cid, hip_api_event->pid, hip_api_event->tid, ss.str().c_str(), hip_api_event->end);
 	}
-	ss << ", " << (hip_api_event->data).correlation_id;
-	barectf_trace_hip_api(ctx, hip_api_event->cid, hip_api_event->pid, hip_api_event->tid, ss.str().c_str(), hip_api_event->end);
 
 }
 
 void HIP_API_Tracer::hip_api_flush_cb(hip_api_trace_entry_t *entry)
 {
-	callback(entry->begin, (tracing_function)trace_hip_api, new hip_api_event_t(entry->begin, entry->tid, entry->cid, entry->pid, entry->data, entry->name, entry->end));
+	callback(entry->begin, (tracing_function)trace_hip_api, new hip_api_event_t(entry->begin, entry->tid, entry->cid, entry->pid, entry->data, entry->name, entry->end, entry->domain));
 }
 
 //HIP activity callback function

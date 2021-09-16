@@ -31,12 +31,10 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#include "ext/prof_protocol.h"
-#include "ext/hsa_rt_utils.hpp"
-
 #include "barectf-platform-linux-fs.h"
 #include "barectf.h"
 
+#include "utils.h"
 #include "tracer.h"
 #include "roctracer_tracers.h"
 
@@ -55,6 +53,7 @@ barectf_default_ctx *tables_ctx;
 uint64_t tables_clock = 0;
 
 bool rtr_plugin_initialized = false;
+bool roctx_trace = false;
 bool hsa_api_trace = false;
 bool hsa_activity_trace = false;
 bool kfd_api_trace = false;
@@ -63,22 +62,15 @@ bool hip_activity_trace = false;
 bool associations_stream_exists = false;
 
 //Tracing objects for HSA/HIP APIs and activity
+rocTX_Tracer *roctx_tracer;
 HSA_API_Tracer *hsa_api_tracer;
 HSA_Activity_Tracer *hsa_activity_tracer;
+KFD_API_Tracer *kfd_api_tracer;
 HIP_API_Tracer *hip_api_tracer;
 HIP_Activity_Tracer *hip_activity_tracer;
 
 //Tracing objects for KFD API
 const char *output_dir;
-int nb_kfd_thread = 0;
-thread_local bool kfd_thread_initialized = false;
-thread_local int kfd_class_idx;
-std::mutex kfd_mutex;
-typedef KFD_API_Tracer **kfd_tracer_array_t;
-kfd_tracer_array_t kfd_tracer_array;
-hsa_rt_utils::Timer **timer_ptr;
-thread_local uint64_t kfd_begin_timestamp = 0;
-static thread_local bool in_kfd_api_callback = false;
 uint64_t nb_events = 0;
 
 void write_nb_events()
@@ -138,14 +130,16 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 }
 
 //Initialize tracing for some APIS
-extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain, void *data)
+extern "C" void load_tracer_plugin(const char *output_directory, activity_domain_t domain)
 {	
 	if (!rtr_plugin_initialized)
 	{
-		output_dir = output_prefix;
+		output_dir = output_directory;
+		initialize_trace_directory(output_dir);
+		
 		rtr_plugin_initialized = true;
 		std::stringstream ss;
-		ss << output_prefix << "/CTF_trace/strings_association_stream";
+		ss << output_dir << "/CTF_trace/strings_association_stream";
 		
 		struct stat buffer;   
         associations_stream_exists = (stat (ss.str().c_str(), &buffer) == 0); 
@@ -162,6 +156,19 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 
 	switch (domain)
 	{
+	case ACTIVITY_DOMAIN_ROCTX:
+	{
+		if (roctx_trace)
+		{
+			printf("rocTX tracing already initialized\n");
+		}
+		else
+		{
+			roctx_tracer = new rocTX_Tracer(output_dir, "roctx_");
+			roctx_trace = true;
+		}
+		break;
+	}
 	case ACTIVITY_DOMAIN_HSA_API:
 	{
 		if (hsa_api_trace)
@@ -170,7 +177,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 		}
 		else
 		{
-			hsa_api_tracer = new HSA_API_Tracer(output_prefix, "hsa_api_");
+			hsa_api_tracer = new HSA_API_Tracer(output_dir, "hsa_api_");
 			hsa_api_trace = true;
 			write_table(tables_ctx, ACTIVITY_DOMAIN_HSA_API);
 		}
@@ -184,7 +191,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 		}
 		else
 		{
-			hsa_activity_tracer = new HSA_Activity_Tracer(output_prefix, "hsa_activity_");
+			hsa_activity_tracer = new HSA_Activity_Tracer(output_dir, "hsa_activity_");
 			hsa_activity_trace = true;
 		}
 		break;
@@ -197,8 +204,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 		}
 		else
 		{
-			timer_ptr = (reinterpret_cast<hsa_rt_utils::Timer **>(data));
-			output_dir = output_prefix;
+			kfd_api_tracer = new KFD_API_Tracer(output_dir, "kfd_api_");
 			kfd_api_trace = true;
 			write_table(tables_ctx, ACTIVITY_DOMAIN_KFD_API);
 		}
@@ -212,7 +218,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 		}
 		else
 		{
-			hip_api_tracer = new HIP_API_Tracer(output_prefix, "hip_api_");
+			hip_api_tracer = new HIP_API_Tracer(output_dir, "hip_api_");
 			hip_api_trace = true;
 			write_table(tables_ctx, ACTIVITY_DOMAIN_HIP_API);
 		}
@@ -226,7 +232,7 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 		}
 		else
 		{
-			hip_activity_tracer = new HIP_Activity_Tracer(output_prefix, "hip_activity_");
+			hip_activity_tracer = new HIP_Activity_Tracer(output_dir, "hip_activity_");
 			hip_activity_trace = true;
 		}
 		break;
@@ -238,8 +244,12 @@ extern "C" void load_ctf_lib(const char *output_prefix, activity_domain_t domain
 }
 
 //Flush the priority queues
-extern "C" void flush_ctf()
+void flush_ctf()
 {
+	if (roctx_trace)
+	{
+		roctx_tracer->flush((Tracer<roctx_event_t>::tracing_function)trace_roctx);
+	}	
 	if (hsa_api_trace)
 	{
 		hsa_api_tracer->flush((Tracer<hsa_api_event_t>::tracing_function)trace_hsa_api);
@@ -250,10 +260,7 @@ extern "C" void flush_ctf()
 	}
 	if (kfd_api_trace)
 	{
-		for (int i = 0; i < nb_kfd_thread; i++)
-		{
-			kfd_tracer_array[i]->flush((Tracer<kfd_api_event_t>::tracing_function)trace_kfd_api);
-		}
+		kfd_api_tracer->flush((Tracer<kfd_api_event_t>::tracing_function)trace_kfd_api);
 	}
 	if (hip_api_trace)
 	{
@@ -266,11 +273,16 @@ extern "C" void flush_ctf()
 }
 
 //Flush then unload the plugin
-extern "C" void unload_ctf_lib()
+extern "C" void unload_plugin_lib()
 {
 	flush_ctf();
 	if (rtr_plugin_initialized)
 	{
+		if (roctx_trace)
+		{
+			nb_events = nb_events + roctx_tracer->get_nb_events();
+			delete roctx_tracer;
+		}
 		if (hsa_api_trace)
 		{
 			nb_events = nb_events + hsa_api_tracer->get_nb_events();
@@ -283,12 +295,8 @@ extern "C" void unload_ctf_lib()
 		}
 		if (kfd_api_trace)
 		{
-			for (int i = 0; i < nb_kfd_thread; i++)
-			{
-				nb_events = nb_events + kfd_tracer_array[i]->get_nb_events();
-				delete kfd_tracer_array[i];
-			}
-			delete[] kfd_tracer_array;
+			nb_events = nb_events + kfd_api_tracer->get_nb_events();
+			delete kfd_api_tracer;
 		}
 		if (hip_api_trace)
 		{
@@ -308,6 +316,11 @@ extern "C" void unload_ctf_lib()
 }
 
 //Functions that will be loaded in tool files and call tracing methodes
+extern "C" void roctx_flush_cb(roctx_trace_entry_t *entry)
+{
+	roctx_tracer->roctx_flush_cb(entry);
+}
+
 extern "C" void hsa_activity_callback(
 	uint32_t op,
 	activity_record_t *record,
@@ -321,54 +334,9 @@ extern "C" void hsa_api_flush_cb(hsa_api_trace_entry_t *entry)
 	hsa_api_tracer->hsa_api_flush_cb(entry);
 }
 
-void add_kfd_class()
+extern "C" void kfd_api_flush_cb(kfd_api_trace_entry_t *entry)
 {
-	if (nb_kfd_thread > 0)
-	{
-		kfd_tracer_array_t kfd_tracer_array2 = new KFD_API_Tracer *[nb_kfd_thread + 1];
-		std::copy(kfd_tracer_array, kfd_tracer_array + nb_kfd_thread, kfd_tracer_array2);
-		delete[] kfd_tracer_array;
-		kfd_tracer_array = kfd_tracer_array2;
-	}
-	else
-	{
-		kfd_tracer_array = new KFD_API_Tracer *[nb_kfd_thread + 1];
-	}
-}
-
-extern "C" void kfd_api_callback(
-	uint32_t domain,
-	uint32_t cid,
-	const void *callback_data,
-	void *arg)
-{
-	if (in_kfd_api_callback)
-		return;
-	in_kfd_api_callback = true;
-	if (!kfd_thread_initialized)
-	{
-		kfd_mutex.lock();
-		add_kfd_class();
-		kfd_thread_initialized = true;
-		kfd_class_idx = nb_kfd_thread;
-		std::stringstream ss;
-		ss << "kfd_api_" << GetTid() << "_";
-		const char *suffix = strdup(ss.str().c_str());
-		kfd_tracer_array[kfd_class_idx] = new KFD_API_Tracer(output_dir, suffix);
-		nb_kfd_thread++;
-		kfd_mutex.unlock();
-	}
-	const kfd_api_data_t *data = reinterpret_cast<const kfd_api_data_t *>(callback_data);
-	if (data->phase == ACTIVITY_API_PHASE_ENTER)
-	{
-		kfd_begin_timestamp = (*timer_ptr)->timestamp_fn_ns();
-	}
-	else
-	{
-		uint64_t kfd_end_timestamp = (*timer_ptr)->timestamp_fn_ns();
-		kfd_tracer_array[kfd_class_idx]->kfd_api_flush_cb(kfd_begin_timestamp, kfd_end_timestamp, cid, data, GetTid(), GetPid());
-	}
-	in_kfd_api_callback = false;
+	kfd_api_tracer->kfd_api_flush_cb(entry);
 }
 
 extern "C" void hip_api_flush_cb(hip_api_trace_entry_t *entry)
