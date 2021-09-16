@@ -23,7 +23,7 @@ When generating a CTF trace, there will be the following files in the CTF_trace 
 - a metadata file
 - a stream named `metrics_stream` containing the names of the collected metrics 
 - a stream named `strings_association_stream` containing events that associates the cids of the traced functions to their names
-- multiple streams for each traced API with the following names : `<pid>_<traced API>_<stream_identifier>` where `<stream identifier>` is the tid of the tracing thread.
+- multiple streams for each traced API with the following names : `<pid>_<traced API>_<stream_identifier>` where `<stream identifier>` is an unique identifier.
 
 
 ## To build the plugin
