@@ -5,8 +5,8 @@ CXXFLAGS = $(BASIC_FLAGS) -std=c++11
 RTR_FLAGS = $(CXXFLAGS) -D __HIP_PLATFORM_HCC__=1 -D __HIP_ROCclr__=1 -D HIP_VDI=1 -D AMD_INTERNAL_BUILD
 AUX_FLAGS = $(RTR_FLAGS) -D HIP_PROF_HIP_API_STRING -D PROF_API_IMPL 
 LINKFLAGS = --shared -lc -lstdc++
-CIMP = -I ./inc -I $(ROCTRACER_SRC) -I $(HSA_INCLUDE) -I $(ROCM_PATH)/include -I $(ROCTRACER_INCLUDES) 
-CIMP2 = -I ./inc -I $(ROCPROFILER_INCLUDES) -I $(HSA_INCLUDE)
+CIMP = -I ./inc -I $(HSA_INCLUDE) -I $(ROCM_PATH)include -I $(ROCM_PATH)include/roctracer
+CIMP2 = -I ./inc -I $(HSA_INCLUDE)  -I $(ROCM_PATH)include/rocprofiler
 SRC_DIR = src
 AUX_DIR := src/aux
 ROCTRACER_FILES_DIR := src/roctracer_files
@@ -22,17 +22,17 @@ AUX_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(AUX_NAMES)))
 CPP_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(CPP_NAMES)))
 ROCTRACER_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(ROCTRACER_NAMES)))
 ROCPROFILER_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(ROCPROFILER_NAMES)))
-all: rocprofiler_plugin_tool.so roctracer_plugin_tool.so
+all: rocprofiler_plugin_lib.so roctracer_plugin_lib.so
 
 
-rocprofiler_plugin_tool.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCPROFILER_OBJECTS) $(ROCM_PATH)/lib/libhsa-runtime64.so 
+rocprofiler_plugin_lib.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCPROFILER_OBJECTS) $(ROCM_PATH)/lib/libhsa-runtime64.so 
 	$(CXX)	$(LINKFLAGS) $^	-o $@
 	
-roctracer_plugin_tool.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCTRACER_OBJECTS) $(ROCM_PATH)/lib/libhsa-runtime64.so 
+roctracer_plugin_lib.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCTRACER_OBJECTS) $(ROCM_PATH)/lib/libhsa-runtime64.so 
 	$(CXX)	$(LINKFLAGS) $^	-o $@ 
 		 
 clean:
-	$(RM) $(OBJ_DIR)/*.o rocprofiler_plugin_tool.so roctracer_plugin_tool.so
+	$(RM) $(OBJ_DIR)/*.o rocprofiler_plugin_lib.so roctracer_plugin_lib.so
 .PHONY : all clean
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c 

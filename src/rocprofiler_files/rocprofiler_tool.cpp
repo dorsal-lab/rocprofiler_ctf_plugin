@@ -28,7 +28,7 @@
 #include "barectf.h"
 #include "tracer.h"
 #include "rocprofiler_tracers.h"
-#include "rocprofiler_tool.h"
+#include "rocprofiler_trace_entries.h"
 #include "utils.h"
 #include <time.h>
 #include <string.h>
@@ -55,7 +55,7 @@ struct timespec tp;
 
 
 //Initialize kernel events tracing
-extern "C" void load_profiler_plugin(const char *prefix, std::vector<std::string> metrics_vector)
+extern "C" void init_plugin_lib(const char *prefix, std::vector<std::string> metrics_vector)
 {
 	if (!kernel_event_initialized)
 	{
@@ -86,13 +86,13 @@ void write_nb_events()
 	out_file << outData.str();
 }
 
-extern "C" void write_context_entry(kernel_trace_entry_t* entry)
+extern "C" void kernel_flush_cb(kernel_trace_entry_t* entry)
 {
-	kernel_event_tracer->write_context_entry(entry);
+	kernel_event_tracer->kernel_flush_cb(entry);
 }
 
 //Write metrics for a kernel event
-extern "C" void write_metric(metric_trace_entry_t *entry)
+extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 {
 	if (metrics_number > 0)
 	{
@@ -125,7 +125,7 @@ extern "C" void write_metric(metric_trace_entry_t *entry)
 	}
 }
 
-extern "C" void unload_profiler_plugin()
+extern "C" void close_plugin_lib()
 {
 	if (kernel_event_initialized)
 	{

@@ -29,35 +29,16 @@
 
 #include <atomic>
 #include "tracer.h"
+#include "roctracer_trace_entries.h"
 #include "roctracer_hsa_aux.h"
 #include "roctracer_hip_aux.h"
 #include "roctracer_kfd_aux.h"
-#include <roctracer_roctx.h>
 #include "hsa_args_str.h"
 #include "kfd_args_str.h"
 #include "hip_args_str.h"
 
-enum entry_type_t {
-  DFLT_ENTRY_TYPE = 0,
-  API_ENTRY_TYPE = 1,
-  COPY_ENTRY_TYPE = 2,
-  KERNEL_ENTRY_TYPE = 3,
-  NUM_ENTRY_TYPE = 4
-};
-
 //rocTX API tracing structures
 typedef uint64_t roctx_range_id_t;
-
-struct roctx_trace_entry_t {
-  std::atomic<uint32_t> valid;
-  entry_type_t type;
-  uint32_t cid;
-  timestamp_t time;
-  uint32_t pid;
-  uint32_t tid;
-  roctx_range_id_t rid;
-  const char* message;
-};
 
 struct roctx_event_t : event_t
 {
@@ -78,18 +59,6 @@ public:
 };
 
 //HSA API tracing structures
-
-struct hsa_api_trace_entry_t
-{
-	std::atomic<uint32_t> valid;
-	entry_type_t type;
-	uint32_t cid;
-	timestamp_t begin;
-	timestamp_t end;
-	uint32_t pid;
-	uint32_t tid;
-	hsa_api_data_t data;
-};
 
 struct hsa_api_event_t : event_t
 {
@@ -121,27 +90,14 @@ struct hsa_activity_event_t : event_t
 
 class HSA_Activity_Tracer : public Tracer<hsa_activity_event_t>
 {
-private:
-	uint64_t index;
 
 public:
-	HSA_Activity_Tracer(const char *prefix, const char *suffix) : Tracer<hsa_activity_event_t>(prefix, suffix) { index = 0; }
+	HSA_Activity_Tracer(const char *prefix, const char *suffix) : Tracer<hsa_activity_event_t>(prefix, suffix) {}
 	~HSA_Activity_Tracer() {}
-	void hsa_activity_callback(uint32_t op, activity_record_t *record, void *arg);
+	void hsa_activity_flush_cb(hsa_activity_trace_entry_t *entry);
 };
 
 //KFD API tracing structures
-struct kfd_api_trace_entry_t {
-  std::atomic<uint32_t> valid;
-  entry_type_t type;
-  uint32_t domain;
-  uint32_t cid;
-  timestamp_t begin;
-  timestamp_t end;
-  uint32_t pid;
-  uint32_t tid;
-  kfd_api_data_t data;
-};
 
 struct kfd_api_event_t : event_t
 {
@@ -162,21 +118,6 @@ public:
 };
 
 //HIP API tracing structures
-
-struct hip_api_trace_entry_t
-{
-	std::atomic<uint32_t> valid;
-	entry_type_t type;
-	uint32_t domain;
-	uint32_t cid;
-	timestamp_t begin;
-	timestamp_t end;
-	uint32_t pid;
-	uint32_t tid;
-	hip_api_data_t data;
-	const char *name;
-	void *ptr;
-};
 
 struct hip_api_event_t : event_t
 {
@@ -212,7 +153,7 @@ class HIP_Activity_Tracer : public Tracer<hip_activity_event_t>
 public:
 	HIP_Activity_Tracer(const char *prefix, const char *suffix) : Tracer<hip_activity_event_t>(prefix, suffix) {}
 	~HIP_Activity_Tracer() {}
-	void hip_activity_callback(const roctracer_record_t *record, const char *name);
+	void hip_activity_flush_cb(hip_activity_trace_entry_t *entry);
 };
 
 void trace_roctx(roctx_event_t *roctx_event, struct barectf_default_ctx *ctx);

@@ -25,6 +25,7 @@
  */
 
 #include <tracer.h>
+#include "roctracer_trace_entries.h"
 #include <roctracer_tracers.h>
 #include <roctracer_hsa_aux.h>
 #include <roctracer_hip_aux.h>
@@ -89,13 +90,9 @@ void trace_hsa_activity(hsa_activity_event_t *hsa_activity_event, struct barectf
 	barectf_trace_hsa_activity(ctx, hsa_activity_event->pid, hsa_activity_event->record_index, hsa_activity_event->end_ns);
 }
 
-void HSA_Activity_Tracer::hsa_activity_callback(
-	uint32_t op,
-	activity_record_t *record,
-	void *arg)
+void HSA_Activity_Tracer::hsa_activity_flush_cb(hsa_activity_trace_entry_t *entry)
 {
-	callback(record->begin_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(record->begin_ns, GetPid(), index, record->end_ns));
-	index++;
+	callback(entry->record->begin_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(entry->record->begin_ns, entry->pid, entry->index, entry->record->end_ns));
 }
 
 //KFD API tracing function
@@ -144,9 +141,7 @@ void trace_hip_activity(hip_activity_event_t *hip_activity_event, struct barectf
 	barectf_trace_hip_activity(ctx, record.device_id, record.queue_id, hip_activity_event->name, record.correlation_id, hip_activity_event->pid, record.end_ns);
 }
 
-void HIP_Activity_Tracer::hip_activity_callback(
-	const roctracer_record_t *record,
-	const char *name)
+void HIP_Activity_Tracer::hip_activity_flush_cb(hip_activity_trace_entry_t *entry)
 {
-	callback(record->begin_ns, (tracing_function)trace_hip_activity, new hip_activity_event_t(record->begin_ns, name, *record, GetPid()));
+	callback(entry->record->begin_ns, (tracing_function)trace_hip_activity, new hip_activity_event_t(entry->record->begin_ns, entry->name, *(entry->record), entry->pid));
 }

@@ -24,9 +24,9 @@
  * SOFTWARE.
  */
 
-#import "tracer.h"
-#import "rocprofiler_tracers.h"
-#include "rocprofiler_tool.h"
+#include "tracer.h"
+#include "rocprofiler_tracers.h"
+#include "rocprofiler_trace_entries.h"
 #include <string.h>
 
 void trace_kernel_event(kernel_event_t *kernel_event, struct barectf_default_ctx *ctx)
@@ -54,10 +54,8 @@ void trace_kernel_event(kernel_event_t *kernel_event, struct barectf_default_ctx
 	free(kernel_event->kernel_name);
 }
 
-void Kernel_Event_Tracer::write_context_entry(kernel_trace_entry_t* entry)
+void Kernel_Event_Tracer::kernel_flush_cb(kernel_trace_entry_t* entry)
 {
-  // uint64_t begin = (record ? record->begin : 0);
-  // uint64_t end = (record ? record->end : 0);
   kernel_event_t *kernel_event = new kernel_event_t(entry->begin,
 	entry->dispatch,
 	entry->gpu_id,
@@ -77,25 +75,5 @@ void Kernel_Event_Tracer::write_context_entry(kernel_trace_entry_t* entry)
 	entry->dispatch_time,
 	entry->end,
 	entry->complete);
-  // kernel_event->dispatch = entry->index;
-  // kernel_event->gpu_id = agent_info->dev_index;
-  // kernel_event->queue_id = entry->data.queue_id;
-  // kernel_event->queue_index = entry->data.queue_index;
-  // kernel_event->pid = my_pid;
-  // kernel_event->tid = entry->data.thread_id;
-  // kernel_event->grd = entry->kernel_properties.grid_size;
-  // kernel_event->wgr = entry->kernel_properties.workgroup_size;
-  // kernel_event->lds = (entry->kernel_properties.lds_size + (AgentInfo::lds_block_size - 1)) & ~(AgentInfo::lds_block_size - 1);
-  // kernel_event->scr = entry->kernel_properties.scratch_size;
-  // kernel_event->vgpr = (entry->kernel_properties.vgpr_count + 1) * agent_info->vgpr_block_size;
-  // kernel_event->sgpr = (entry->kernel_properties.sgpr_count + agent_info->sgpr_block_dflt) * agent_info->sgpr_block_size;
-  // kernel_event->fbar = entry->kernel_properties.fbarrier_count;
-  // kernel_event->sig = entry->kernel_properties.signal.handle;
-  // kernel_event->obj = entry->kernel_properties.object;
-  // kernel_event->kernel_name = strdup(nik_name.c_str());
-  // kernel_event->dispatch_time = (record ? record->dispatch : 0);
-  // kernel_event->complete_time = (record ? record->complete : 0);
-  // kernel_event->end = end;
-
   callback(entry->begin, (tracing_function)trace_kernel_event, kernel_event);
 }

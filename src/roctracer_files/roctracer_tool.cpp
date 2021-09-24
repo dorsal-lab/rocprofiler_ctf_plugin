@@ -38,6 +38,7 @@
 #include "tracer.h"
 #include "roctracer_tracers.h"
 
+#include "roctracer_trace_entries.h"
 #include "roctracer_hsa_aux.h"
 #include "roctracer_hip_aux.h"
 #include "roctracer_kfd_aux.h"
@@ -130,7 +131,7 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 }
 
 //Initialize tracing for some APIS
-extern "C" void load_tracer_plugin(const char *output_directory, activity_domain_t domain)
+extern "C" void init_plugin_lib(const char *output_directory, activity_domain_t domain)
 {	
 	if (!rtr_plugin_initialized)
 	{
@@ -273,7 +274,7 @@ void flush_ctf()
 }
 
 //Flush then unload the plugin
-extern "C" void unload_plugin_lib()
+extern "C" void close_plugin_lib()
 {
 	flush_ctf();
 	if (rtr_plugin_initialized)
@@ -321,12 +322,9 @@ extern "C" void roctx_flush_cb(roctx_trace_entry_t *entry)
 	roctx_tracer->roctx_flush_cb(entry);
 }
 
-extern "C" void hsa_activity_callback(
-	uint32_t op,
-	activity_record_t *record,
-	void *arg)
+extern "C" void hsa_activity_flush_cb(hsa_activity_trace_entry_t *entry)
 {
-	hsa_activity_tracer->hsa_activity_callback(op, record, arg);
+	hsa_activity_tracer->hsa_activity_flush_cb(entry);
 }
 
 extern "C" void hsa_api_flush_cb(hsa_api_trace_entry_t *entry)
@@ -344,7 +342,7 @@ extern "C" void hip_api_flush_cb(hip_api_trace_entry_t *entry)
 	hip_api_tracer->hip_api_flush_cb(entry);
 }
 
-extern "C" void hip_activity_callback(const roctracer_record_t *record, const char *name)
+extern "C" void hip_activity_flush_cb(hip_activity_trace_entry_t *entry)
 {
-	hip_activity_tracer->hip_activity_callback(record, name);
+	hip_activity_tracer->hip_activity_flush_cb(entry);
 }

@@ -30,17 +30,6 @@
 #ifdef __cplusplus
 #include <iostream>
 
-inline std::ostream &operator<<(std::ostream &out, const unsigned char &v)
-{
-  out << (unsigned int)v;
-  return out;
-}
-
-inline std::ostream &operator<<(std::ostream &out, const char &v)
-{
-  out << (unsigned char)v;
-  return out;
-}
 const char *GetHIPApiName(const uint32_t &id);
 #endif
 #include <hip/hip_runtime.h>

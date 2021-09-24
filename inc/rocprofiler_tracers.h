@@ -27,7 +27,7 @@
 #ifndef ROCPROFILER_TRACERS_H_
 #define ROCPROFILER_TRACERS_H_
 #include "tracer.h"
-#include "rocprofiler_tool.h"
+#include "rocprofiler_trace_entries.h"
 
 struct kernel_event_t : event_t
 {
@@ -98,7 +98,7 @@ class Kernel_Event_Tracer : public Tracer<kernel_event_t>
 public:
 	Kernel_Event_Tracer(const char *prefix, const char *suffix) : Tracer<kernel_event_t>(prefix, suffix) {}
 	~Kernel_Event_Tracer() {}
-	void write_context_entry(kernel_trace_entry_t* kernel_trace_entry);
+	void kernel_flush_cb(kernel_trace_entry_t* kernel_trace_entry);
 };
 
 void trace_kernel_event(kernel_event_t *kernel_event, struct barectf_default_ctx *ctx);
