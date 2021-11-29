@@ -7,7 +7,7 @@
 void initialize_trace_directory(const char* output_prefix){
 	struct stat buffer;
 	std::stringstream trace_directory;
-	trace_directory << output_prefix << "/CTF_trace";
+	trace_directory << output_prefix << "/rocprof_ctf_trace";
 	if(stat(trace_directory.str().c_str(), &buffer) != 0){
 		mkdir(trace_directory.str().c_str(), 0777);
 		const char* ctf_plugin = getenv("PLUGIN_PATH");

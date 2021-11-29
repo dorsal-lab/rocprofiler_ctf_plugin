@@ -62,7 +62,7 @@ extern "C" void init_plugin_lib(const char *prefix, std::vector<std::string> met
 		output_dir = prefix;
 		initialize_trace_directory(output_dir);
 		std::stringstream ss;
-		ss << prefix << "/CTF_trace/" << GetPid() << "_metrics_stream";
+		ss << prefix << "/rocprof_ctf_trace/" << GetPid() << "_metrics_stream";
 		platform_metrics = barectf_platform_linux_fs_init(15000, ss.str().c_str(), 0, 0, 0, &metrics_clock);
 		ctx_metrics = barectf_platform_linux_fs_get_barectf_ctx(platform_metrics);
 		kernel_event_tracer = new Kernel_Event_Tracer(prefix, "kernel_events_");
@@ -80,7 +80,7 @@ void write_nb_events()
 {
 	std::ostringstream outData;
 	std::stringstream ss_metadata;
-	ss_metadata << output_dir << "/CTF_trace/" << GetPid() << "_rocprofiler_nb_events.txt";
+	ss_metadata << output_dir << "/rocprof_ctf_trace/" << GetPid() << "_rocprofiler_nb_events.txt";
 	outData << nb_events;
 	std::ofstream out_file(ss_metadata.str());
 	out_file << outData.str();
@@ -96,7 +96,6 @@ extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 {
 	if (metrics_number > 0)
 	{
-		int relative_idx = 0;
 		if (!metrics_tables_dumped)
 		{
 			if (metrics_names == NULL)

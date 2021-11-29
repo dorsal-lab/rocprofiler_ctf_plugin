@@ -57,8 +57,8 @@ trace {
 
 env {
 	domain = "bare";
-	tracer_name = "barectf";
-	roctracer_nb_events = 
+	tracer_name = "rocprof";
+	nb_events = 0;
 	tracer_major = 3;
 	tracer_minor = 0;
 	tracer_patch = 1;

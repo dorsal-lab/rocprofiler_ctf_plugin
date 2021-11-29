@@ -78,7 +78,7 @@ void write_nb_events()
 {
 	std::ostringstream outData;
 	std::stringstream ss_metadata;
-	ss_metadata << output_dir << "/CTF_trace/" << GetPid() << "_roctracer_nb_events.txt";
+	ss_metadata << output_dir << "/rocprof_ctf_trace/" << GetPid() << "_roctracer_nb_events.txt";
 	outData << nb_events;
     std::ofstream out_file(ss_metadata.str());
     out_file << outData.str();
@@ -140,7 +140,7 @@ extern "C" void init_plugin_lib(const char *output_directory, activity_domain_t 
 		
 		rtr_plugin_initialized = true;
 		std::stringstream ss;
-		ss << output_dir << "/CTF_trace/strings_association_stream";
+		ss << output_dir << "/rocprof_ctf_trace/strings_association_stream";
 		
 		struct stat buffer;   
         associations_stream_exists = (stat (ss.str().c_str(), &buffer) == 0); 
