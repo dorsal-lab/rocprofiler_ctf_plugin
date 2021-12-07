@@ -41,9 +41,7 @@
 #include "roctracer_trace_entries.h"
 #include "roctracer_hsa_aux.h"
 #include "roctracer_hip_aux.h"
-#include "roctracer_kfd_aux.h"
 #include "hsa_args_str.h"
-#include "kfd_args_str.h"
 #include "hip_args_str.h"
 
 #define SECONDS_TO_NANOSECONDS 1000000000
@@ -57,7 +55,6 @@ bool rtr_plugin_initialized = false;
 bool roctx_trace = false;
 bool hsa_api_trace = false;
 bool hsa_activity_trace = false;
-bool kfd_api_trace = false;
 bool hip_api_trace = false;
 bool hip_activity_trace = false;
 bool associations_stream_exists = false;
@@ -66,7 +63,6 @@ bool associations_stream_exists = false;
 rocTX_Tracer *roctx_tracer;
 HSA_API_Tracer *hsa_api_tracer;
 HSA_Activity_Tracer *hsa_activity_tracer;
-KFD_API_Tracer *kfd_api_tracer;
 HIP_API_Tracer *hip_api_tracer;
 HIP_Activity_Tracer *hip_activity_tracer;
 
@@ -99,17 +95,6 @@ void write_table(barectf_default_ctx *ctx, activity_domain_t domain)
 		for (int i = 0; i < hsa_table_size; i++)
 		{
 			barectf_trace_hsa_function_name(ctx, hsa_table[i], GetHSAApiName(hsa_table[i]));
-			nb_events++;
-		}
-		break;
-	}
-	case (ACTIVITY_DOMAIN_KFD_API):
-	{
-		const kfd_api_id_t *kfd_table = kfd_api_table();
-		int kfd_table_size = GetKFDApiSize();
-		for (int i = 0; i < kfd_table_size; i++)
-		{
-			barectf_trace_kfd_function_name(ctx, kfd_table[i], GetKFDApiName(kfd_table[i]));
 			nb_events++;
 		}
 		break;
@@ -197,20 +182,6 @@ extern "C" void init_plugin_lib(const char *output_directory, activity_domain_t 
 		}
 		break;
 	}
-	case ACTIVITY_DOMAIN_KFD_API:
-	{
-		if (kfd_api_trace)
-		{
-			printf("kfd_api tracing already initialized\n");
-		}
-		else
-		{
-			kfd_api_tracer = new KFD_API_Tracer(output_dir, "kfd_api_");
-			kfd_api_trace = true;
-			write_table(tables_ctx, ACTIVITY_DOMAIN_KFD_API);
-		}
-		break;
-	}
 	case ACTIVITY_DOMAIN_HIP_API:
 	{
 		if (hip_api_trace)
@@ -259,10 +230,6 @@ void flush_ctf()
 	{
 		hsa_activity_tracer->flush((Tracer<hsa_activity_event_t>::tracing_function)trace_hsa_activity);
 	}
-	if (kfd_api_trace)
-	{
-		kfd_api_tracer->flush((Tracer<kfd_api_event_t>::tracing_function)trace_kfd_api);
-	}
 	if (hip_api_trace)
 	{
 		hip_api_tracer->flush((Tracer<hip_api_event_t>::tracing_function)trace_hip_api);
@@ -293,11 +260,6 @@ extern "C" void close_plugin_lib()
 		{
 			nb_events = nb_events + hsa_activity_tracer->get_nb_events();
 			delete hsa_activity_tracer;
-		}
-		if (kfd_api_trace)
-		{
-			nb_events = nb_events + kfd_api_tracer->get_nb_events();
-			delete kfd_api_tracer;
 		}
 		if (hip_api_trace)
 		{
@@ -332,10 +294,6 @@ extern "C" void hsa_api_flush_cb(hsa_api_trace_entry_t *entry)
 	hsa_api_tracer->hsa_api_flush_cb(entry);
 }
 
-extern "C" void kfd_api_flush_cb(kfd_api_trace_entry_t *entry)
-{
-	kfd_api_tracer->kfd_api_flush_cb(entry);
-}
 
 extern "C" void hip_api_flush_cb(hip_api_trace_entry_t *entry)
 {

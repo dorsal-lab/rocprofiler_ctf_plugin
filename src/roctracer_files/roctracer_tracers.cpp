@@ -29,9 +29,7 @@
 #include <roctracer_tracers.h>
 #include <roctracer_hsa_aux.h>
 #include <roctracer_hip_aux.h>
-#include <roctracer_kfd_aux.h>
 #include <hsa_args_str.h>
-#include <kfd_args_str.h>
 #include <hip_args_str.h>
 #include <mutex>
 #include <cxxabi.h>
@@ -93,19 +91,6 @@ void trace_hsa_activity(hsa_activity_event_t *hsa_activity_event, struct barectf
 void HSA_Activity_Tracer::hsa_activity_flush_cb(hsa_activity_trace_entry_t *entry)
 {
 	callback(entry->record->begin_ns, (tracing_function)trace_hsa_activity, new hsa_activity_event_t(entry->record->begin_ns, entry->pid, entry->index, entry->record->end_ns));
-}
-
-//KFD API tracing function
-
-void trace_kfd_api(kfd_api_event_t *kfd_event, struct barectf_default_ctx *ctx)
-{
-	kfd_api_string_pair_t arguments = kfd_api_pair_of_args(kfd_event->cid, kfd_event->data);
-	barectf_trace_kfd_api(ctx, kfd_event->cid, kfd_event->pid, kfd_event->tid, arguments.first.c_str(), arguments.second.c_str(), kfd_event->end);
-}
-
-void KFD_API_Tracer::kfd_api_flush_cb(kfd_api_trace_entry_t *entry)
-{
-	callback(entry->begin, (tracing_function)trace_kfd_api, new kfd_api_event_t(entry->begin, entry->tid, entry->cid, entry->pid, entry->data, entry->end));
 }
 
 //HIP API tracing function

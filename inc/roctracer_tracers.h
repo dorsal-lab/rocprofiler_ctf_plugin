@@ -32,9 +32,7 @@
 #include "roctracer_trace_entries.h"
 #include "roctracer_hsa_aux.h"
 #include "roctracer_hip_aux.h"
-#include "roctracer_kfd_aux.h"
 #include "hsa_args_str.h"
-#include "kfd_args_str.h"
 #include "hip_args_str.h"
 
 //rocTX API tracing structures
@@ -97,26 +95,6 @@ public:
 	void hsa_activity_flush_cb(hsa_activity_trace_entry_t *entry);
 };
 
-//KFD API tracing structures
-
-struct kfd_api_event_t : event_t
-{
-	uint32_t tid;
-	uint32_t cid;
-	uint32_t pid;
-	kfd_api_data_t data;
-	uint64_t end;
-	kfd_api_event_t(uint64_t time_s, uint32_t tid_s, uint32_t cid_s, uint32_t pid_s, kfd_api_data_t data_s, uint64_t end_s) : event_t(time_s), tid(tid_s), cid(cid_s), pid(pid_s), data(data_s), end(end_s) {}
-};
-
-class KFD_API_Tracer : public Tracer<kfd_api_event_t>
-{
-public:
-	KFD_API_Tracer(const char *prefix, const char *suffix) : Tracer<kfd_api_event_t>(prefix, suffix) {}
-	~KFD_API_Tracer() {}
-	void kfd_api_flush_cb(kfd_api_trace_entry_t *entry);
-};
-
 //HIP API tracing structures
 
 struct hip_api_event_t : event_t
@@ -159,7 +137,6 @@ public:
 void trace_roctx(roctx_event_t *roctx_event, struct barectf_default_ctx *ctx);
 void trace_hip_activity(hip_activity_event_t *hip_activity_event, struct barectf_default_ctx *ctx);
 void trace_hip_api(hip_api_event_t *hip_api_event, struct barectf_default_ctx *ctx);
-void trace_kfd_api(kfd_api_event_t *kfd_event, struct barectf_default_ctx *ctx);
 void trace_hsa_activity(hsa_activity_event_t *hsa_activity_event, struct barectf_default_ctx *ctx);
 void trace_hsa_api(hsa_api_event_t *hsa_api_event, struct barectf_default_ctx *ctx);
 #endif
