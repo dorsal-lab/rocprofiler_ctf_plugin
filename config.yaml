@@ -48,17 +48,6 @@ trace:
                 - pid: uint32
                 - index: uint64
                 - end: uint64
-                
-          kfd_api:
-            payload-field-type:
-              class: structure
-              members:
-                - cid: uint32
-                - pid: uint32
-                - tid: uint32
-                - args: string
-                - retval: string
-                - end: uint64
 
           hip_api:
             payload-field-type:
@@ -89,13 +78,6 @@ trace:
                 - name: string
 
           hip_function_name:
-            payload-field-type:
-              class: structure
-              members:
-                - correlation_id: uint64
-                - name: string
-
-          kfd_function_name:
             payload-field-type:
               class: structure
               members:
