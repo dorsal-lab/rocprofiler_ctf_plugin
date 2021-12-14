@@ -2,6 +2,7 @@ import sys
 import glob
 import os
 import time
+import re
 from datetime import datetime
 
 if(len(sys.argv) != 2):
@@ -39,9 +40,19 @@ for i in range(iterations_number):
 metadata_file = glob.glob(sys.argv[1] + "/**/metadata", recursive = True)[0]
 metadata_f = open(metadata_file, "r")
 list_of_lines = metadata_f.readlines()
-list_of_lines[60] = "\tnb_events = " + str(total_nb_events) +";\n"
-list_of_lines[72] = "\toffset_s = " + str(offset_seconds) +";\n"
-list_of_lines[73] = "\toffset = " + str(offset_ns) +";\n"
+
+nb_events_pattern = re.compile(r"\tnb_events = 0;\n")
+offset_s_pattern = re.compile(r"\toffset_s = 0;\n")
+offset_pattern = re.compile(r"\toffset = 0;\n")
+
+for line_number in range(len(list_of_lines)):
+    line = list_of_lines[line_number]
+    if(nb_events_pattern.match(line)):
+        list_of_lines[line_number] = "\tnb_events = " + str(total_nb_events) +";\n"
+    if(offset_s_pattern.match(line)):
+        list_of_lines[line_number] = "\toffset_s = " + str(offset_seconds) +";\n"
+    if(offset_pattern.match(line)):
+        list_of_lines[line_number] = "\toffset = " + str(offset_ns) +";\n"
 
 
 metadata_f = open(metadata_file, "w")

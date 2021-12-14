@@ -47,5 +47,7 @@ cd <your path/ctf_plugin> && ./build.sh
 ```
 It will:
 - generate cpp files with functions to convert APIs data to strings from `<hsa|kfd|hip>_prof_str.h`
-- build the shared libraries `rocprofiler_plugin_lib.so` and `roctracer_plugin_lib.so` with functions that will be loaded from tool.cpp and tracer_tool.cpp files in `rocprofiler/roctracer` 
+- build the shared libraries `rocprofiler_plugin_lib.so` and `roctracer_plugin_lib.so` with functions that will be loaded from tool.cpp and tracer_tool.cpp files in `rocprofiler/roctracer`
+
+If you have [barectf](https://barectf.org/docs/barectf/3.0/index.html) installed, you can regenerate the code files used to write the events in case you modified some of the events in the configuration file by using the `--barectf-generate` option with the `build.sh` script. However, when modifying events in the configuration file, you may also need to modify some parts of the code that are not generated automatically.
 
