@@ -125,10 +125,6 @@ extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 			default:
 				break;
 		}
-		metrics_idx++;
-		if(metrics_idx == metrics_number){
-			metrics_idx = 0;
-		}
 	}
 }
 
