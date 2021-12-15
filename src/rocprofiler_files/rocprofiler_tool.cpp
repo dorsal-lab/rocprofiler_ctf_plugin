@@ -113,6 +113,7 @@ extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 			}
 		}
 
+		metrics_values[metrics_idx] = entry->result;
 		metrics_idx++;
 		if(metrics_idx == metrics_number){
 			clock_gettime(CLOCK_MONOTONIC, &tp);
