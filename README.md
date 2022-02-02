@@ -11,11 +11,6 @@ To generate CTF traces you need to run the rocprof command with the --output-plu
 
 ```rocprof --output-plugin ctf/plugin/directory --hsa-trace -d my_traces my_program```
 
-Finally, to compute and write the offsets of the trace and the number of events in the metadata file, you must run the post_processing.py python script located in the ```scripts``` directory with the trace directory as argument:
-```
-python ctf/plugin/directory/scripts/post_processing.py my_traces
-```
-
 ## Informations about the generated traces
 
 For each API, the plugin will generate interval events sorted by beginning with an end timestamp field.
@@ -31,7 +26,7 @@ When generating a CTF trace, there will be the following files in the CTF_trace 
 You will need the following things:
 - python3
 - ROCTracer with interface implementation  : <https://github.com/dorsal-lab/roctracer/tree/rocm-4.3.x-PR5> (branch rocm-4.3.x-PR5)
-- ROCProfiler with interface implementation : <https://github.com/dorsal-lab/rocprofiler/tree/rocm-4.3.x-PR5> (branch rocm-4.3.x-PR5)
+- ROCProfiler with interface implementation : <https://github.com/dorsal-lab/rocprofiler/tree/rocm-4.3.x-PR5> (branch post_processing)
 
 ### Set the environment:
 

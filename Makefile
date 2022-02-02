@@ -22,7 +22,7 @@ AUX_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(AUX_NAMES)))
 CPP_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(CPP_NAMES)))
 ROCTRACER_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(ROCTRACER_NAMES)))
 ROCPROFILER_OBJECTS := $(addsuffix .o, $(addprefix $(OBJ_DIR)/, $(ROCPROFILER_NAMES)))
-all: rocprofiler_plugin_lib.so roctracer_plugin_lib.so
+all: rocprofiler_plugin_lib.so roctracer_plugin_lib.so post_processing
 
 
 rocprofiler_plugin_lib.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCPROFILER_OBJECTS) $(ROCM_PATH)/lib/libhsa-runtime64.so 
@@ -30,7 +30,10 @@ rocprofiler_plugin_lib.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCPROFI
 	
 roctracer_plugin_lib.so: $(C_OBJECTS) $(AUX_OBJECTS) $(CPP_OBJECTS) $(ROCTRACER_OBJECTS) $(ROCM_PATH)/lib/libhsa-runtime64.so 
 	$(CXX)	$(LINKFLAGS) $^	-o $@ 
-		 
+
+post_processing:
+	$(CXX) $(BASIC_FLAGS) -std=c++17 src/post_processing.cpp -o $@
+
 clean:
 	$(RM) $(OBJ_DIR)/*.o rocprofiler_plugin_lib.so roctracer_plugin_lib.so
 .PHONY : all clean
