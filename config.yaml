@@ -6,6 +6,7 @@ trace:
     $include:
       - stdint.yaml
       - stdmisc.yaml
+      - stdreal.yaml
       
     native-byte-order: little-endian
 
@@ -125,13 +126,18 @@ trace:
                         class: dynamic-array
                         element-field-type: string
 
-          metrics_values:
+          metric_uint64:
             payload-field-type:
               class: structure
               members:
                 - dispatch: uint32
                 - gpu_id: uint32
-                - metrics:
-                    field-type:
-                        class: dynamic-array
-                        element-field-type: uint64
+                - value: uint64
+
+          metric_double:
+            payload-field-type:
+              class: structure
+              members:
+                - dispatch: uint32
+                - gpu_id: uint32
+                - value: double

@@ -29,6 +29,7 @@
 #include "tracer.h"
 #include "rocprofiler_tracers.h"
 #include "rocprofiler_trace_entries.h"
+#include "rocprofiler.h"
 #include "utils.h"
 #include <time.h>
 #include <string.h>
@@ -46,9 +47,7 @@ uint32_t dev_index = 0;
 bool kernel_event_initialized = false;
 bool metrics_tables_dumped = false;
 uint32_t metrics_number = 0;
-uint32_t intermediate_metrics_number = 0;
 const char **metrics_names;
-uint64_t *metrics_values;
 uint32_t metrics_idx = 0;
 Kernel_Event_Tracer *kernel_event_tracer;
 struct timespec tp;
@@ -67,7 +66,6 @@ extern "C" void init_plugin_lib(const char *prefix, std::vector<std::string> met
 		ctx_metrics = barectf_platform_linux_fs_get_barectf_ctx(platform_metrics);
 		kernel_event_tracer = new Kernel_Event_Tracer(prefix, "kernel_events_");
 		metrics_number = metrics_vector.size();
-		metrics_values = new uint64_t[metrics_number];
 		kernel_event_initialized = true;
 	}
 	else
@@ -113,14 +111,19 @@ extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 			}
 		}
 
-		metrics_values[metrics_idx] = entry->result;
-		metrics_idx++;
-		if(metrics_idx == metrics_number){
-			clock_gettime(CLOCK_MONOTONIC, &tp);
-			metrics_clock = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
-			barectf_trace_metrics_values(ctx_metrics, entry->dispatch, dev_index, metrics_number, metrics_values);
-			nb_events++;
-			metrics_idx = 0;
+		clock_gettime(CLOCK_MONOTONIC, &tp);
+		metrics_clock = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
+		switch (entry->metric_type) {
+			case ROCPROFILER_DATA_KIND_INT64 : {
+				barectf_trace_metric_uint64(ctx_metrics, entry->dispatch, dev_index, entry->result_uint64);
+				nb_events++;}
+				break;
+			case ROCPROFILER_DATA_KIND_DOUBLE : {
+				barectf_trace_metric_double(ctx_metrics, entry->dispatch, dev_index, entry->result_double);
+				nb_events++;}
+				break;
+			default:
+				break;
 		}
 	}
 }
