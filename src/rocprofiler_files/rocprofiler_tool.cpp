@@ -56,7 +56,7 @@ bool first_kernel_traced = false;
 bool second_kernel_traced = false;
 
 const char *output_dir;
-uint32_t dev_index = 0;
+thread_local uint32_t dev_index = 0;
 bool kernel_event_initialized = false;
 Kernel_Event_Tracer *kernel_event_tracer;
 struct timespec tp;
@@ -69,12 +69,7 @@ extern "C" void init_plugin_lib(const char *prefix, std::vector<std::string> met
 	{
 		output_dir = prefix;
 		initialize_trace_directory(output_dir);
-		// std::stringstream ss;
-		// ss << prefix << "/rocprof_ctf_trace/" << GetPid() << "_metrics_stream";
-		// platform_metrics = barectf_platform_linux_fs_init(15000, ss.str().c_str(), 0, 0, 0, &metrics_clock);
-		// ctx_metrics = barectf_platform_linux_fs_get_barectf_ctx(platform_metrics);
 		kernel_event_tracer = new Kernel_Event_Tracer(prefix, "kernel_events_");
-		// metrics_number = metrics_vector.size();
 		kernel_event_initialized = true;
 		if(!metrics_vector.empty()){
 			//Initialize metrics streams
@@ -111,6 +106,7 @@ void write_nb_events()
 extern "C" void kernel_flush_cb(kernel_trace_entry_t* entry)
 {
 	kernel_id++;
+	dev_index = entry->gpu_id;
 	kernel_event_tracer->kernel_flush_cb(entry);
 }
 
