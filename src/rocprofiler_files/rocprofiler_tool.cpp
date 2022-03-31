@@ -51,9 +51,6 @@ uint64_t nb_events = 0;
 uint64_t kernel_id = 0;
 
 bool metrics_set_empty = true;
-bool metrics_names_flushed = false;
-bool first_kernel_traced = false;
-bool second_kernel_traced = false;
 
 const char *output_dir;
 thread_local uint32_t dev_index = 0;
@@ -72,6 +69,7 @@ extern "C" void init_plugin_lib(const char *prefix, std::vector<std::string> met
 		kernel_event_tracer = new Kernel_Event_Tracer(prefix, "kernel_events_");
 		kernel_event_initialized = true;
 		if(!metrics_vector.empty()){
+			metrics_set_empty = false;
 			//Initialize metrics streams
 
 			std::stringstream ss_metrics_names_stream;
@@ -139,15 +137,15 @@ extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 
 extern "C" void close_plugin_lib()
 {
-	if (kernel_event_initialized)
-	{
+	if (kernel_event_initialized){
 		kernel_event_tracer->flush((Tracer<kernel_event_t>::tracing_function)trace_kernel_event);
-		barectf_platform_linux_fs_fini(platform_metrics);
-		barectf_trace_metric_name_end(ctx_metrics_names);
-		nb_events++;
-		barectf_platform_linux_fs_fini(platform_metrics_names);
-		if (kernel_event_tracer != NULL)
-		{
+		if(!metrics_set_empty){
+			barectf_platform_linux_fs_fini(platform_metrics);
+			barectf_trace_metric_name_end(ctx_metrics_names);
+			nb_events++;
+			barectf_platform_linux_fs_fini(platform_metrics_names);
+		}
+		if (kernel_event_tracer != NULL){
 			nb_events += kernel_event_tracer->get_nb_events();
 			write_nb_events();
 			delete kernel_event_tracer;
