@@ -1,7 +1,7 @@
 import os, re
 
 PLUGIN_MAJOR = 1
-PLUGIN_MINOR = 0
+PLUGIN_MINOR = 1
 
 stream = os.popen('apt-cache show rocm-libs')
 rocm_libs_info = stream.readlines()

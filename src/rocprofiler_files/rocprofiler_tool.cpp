@@ -39,16 +39,22 @@
 
 barectf_platform_linux_fs_ctx *platform_metrics;
 barectf_default_ctx *ctx_metrics;
+
+barectf_platform_linux_fs_ctx *platform_metrics_names;
+barectf_default_ctx *ctx_metrics_names;
+
 uint64_t metrics_clock = 0;
+uint64_t metrics_names_ts = 0;
+uint32_t metric_id = 0;
+uint32_t metrics_number = 0;
 uint64_t nb_events = 0;
+uint64_t kernel_id = 0;
+
+bool metrics_set_empty = true;
 
 const char *output_dir;
-uint32_t dev_index = 0;
+thread_local uint32_t dev_index = 0;
 bool kernel_event_initialized = false;
-bool metrics_tables_dumped = false;
-uint32_t metrics_number = 0;
-const char **metrics_names;
-uint32_t metrics_idx = 0;
 Kernel_Event_Tracer *kernel_event_tracer;
 struct timespec tp;
 
@@ -60,13 +66,24 @@ extern "C" void init_plugin_lib(const char *prefix, std::vector<std::string> met
 	{
 		output_dir = prefix;
 		initialize_trace_directory(output_dir);
-		std::stringstream ss;
-		ss << prefix << "/rocprof_ctf_trace/" << GetPid() << "_metrics_stream";
-		platform_metrics = barectf_platform_linux_fs_init(15000, ss.str().c_str(), 0, 0, 0, &metrics_clock);
-		ctx_metrics = barectf_platform_linux_fs_get_barectf_ctx(platform_metrics);
 		kernel_event_tracer = new Kernel_Event_Tracer(prefix, "kernel_events_");
-		metrics_number = metrics_vector.size();
 		kernel_event_initialized = true;
+		if(!metrics_vector.empty()){
+			metrics_set_empty = false;
+			//Initialize metrics streams
+
+			std::stringstream ss_metrics_names_stream;
+			ss_metrics_names_stream << prefix << "/rocprof_ctf_trace/" << GetPid() << "_metrics_names";
+			clock_gettime(CLOCK_MONOTONIC, &tp);
+			metrics_names_ts = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
+			platform_metrics_names = barectf_platform_linux_fs_init(15000, ss_metrics_names_stream.str().c_str(), 0, 0, 0, &metrics_names_ts);
+			ctx_metrics_names = barectf_platform_linux_fs_get_barectf_ctx(platform_metrics_names);
+
+			std::stringstream ss_metrics_stream;
+			ss_metrics_stream << prefix << "/rocprof_ctf_trace/" << GetPid() << "_metrics";
+			platform_metrics = barectf_platform_linux_fs_init(15000, ss_metrics_stream.str().c_str(), 0, 0, 0, &metrics_clock);
+			ctx_metrics = barectf_platform_linux_fs_get_barectf_ctx(platform_metrics);
+		}
 	}
 	else
 	{
@@ -86,56 +103,49 @@ void write_nb_events()
 
 extern "C" void kernel_flush_cb(kernel_trace_entry_t* entry)
 {
+	kernel_id++;
+	dev_index = entry->gpu_id;
 	kernel_event_tracer->kernel_flush_cb(entry);
 }
 
 //Write metrics for a kernel event
 extern "C" void metric_flush_cb(metric_trace_entry_t *entry)
 {
-	if (metrics_number > 0)
+	if (kernel_id == 1)
 	{
-		if (!metrics_tables_dumped)
-		{
-			if (metrics_names == NULL)
-			{
-				metrics_names = new const char *[metrics_number];
-			}
-			metrics_names[metrics_idx] = strdup(entry->name);
-			if(metrics_idx == metrics_number - 1){
-				clock_gettime(CLOCK_MONOTONIC, &tp);
-				metrics_clock = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
-				barectf_trace_metrics_table(ctx_metrics, metrics_number, metrics_names);
-				nb_events++;
-				delete[] metrics_names;
-				metrics_tables_dumped = true;
-			}
-		}
-
-		clock_gettime(CLOCK_MONOTONIC, &tp);
-		metrics_clock = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
-		switch (entry->metric_type) {
-			case ROCPROFILER_DATA_KIND_INT64 : {
-				barectf_trace_metric_uint64(ctx_metrics, entry->dispatch, dev_index, entry->result_uint64);
-				nb_events++;}
-				break;
-			case ROCPROFILER_DATA_KIND_DOUBLE : {
-				barectf_trace_metric_double(ctx_metrics, entry->dispatch, dev_index, entry->result_double);
-				nb_events++;}
-				break;
-			default:
-				break;
-		}
+		barectf_trace_metric_name(ctx_metrics_names, metric_id, entry->name);
+		metrics_number++;
+		nb_events++;
 	}
+	
+	clock_gettime(CLOCK_MONOTONIC, &tp);
+	metrics_clock = SECONDS_TO_NANOSECONDS * tp.tv_sec + tp.tv_nsec;
+	switch (entry->metric_type) {
+		case ROCPROFILER_DATA_KIND_INT64 : {
+			barectf_trace_metric_uint64(ctx_metrics, metric_id % metrics_number, entry->dispatch, dev_index, entry->result_uint64);
+			nb_events++;}
+			break;
+		case ROCPROFILER_DATA_KIND_DOUBLE : {
+			barectf_trace_metric_double(ctx_metrics, metric_id % metrics_number, entry->dispatch, dev_index, entry->result_double);
+			nb_events++;}
+			break;
+		default:
+			break;
+		}
+	metric_id++;
 }
 
 extern "C" void close_plugin_lib()
 {
-	if (kernel_event_initialized)
-	{
+	if (kernel_event_initialized){
 		kernel_event_tracer->flush((Tracer<kernel_event_t>::tracing_function)trace_kernel_event);
-		barectf_platform_linux_fs_fini(platform_metrics);
-		if (kernel_event_tracer != NULL)
-		{
+		if(!metrics_set_empty){
+			barectf_platform_linux_fs_fini(platform_metrics);
+			barectf_trace_metric_name_end(ctx_metrics_names);
+			nb_events++;
+			barectf_platform_linux_fs_fini(platform_metrics_names);
+		}
+		if (kernel_event_tracer != NULL){
 			nb_events += kernel_event_tracer->get_nb_events();
 			write_nb_events();
 			delete kernel_event_tracer;

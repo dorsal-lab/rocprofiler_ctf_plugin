@@ -117,19 +117,22 @@ trace:
                 - complete_time: uint64
                 - end: uint64
 
-          metrics_table:
+          metric_name:
             payload-field-type:
               class: structure
               members:
-                - metrics_names:
-                    field-type:
-                        class: dynamic-array
-                        element-field-type: string
+                - id: uint32
+                - name: string
+
+          metric_name_end:
+            payload-field-type:
+              class: structure
 
           metric_uint64:
             payload-field-type:
               class: structure
               members:
+                - id: uint32
                 - dispatch: uint32
                 - gpu_id: uint32
                 - value: uint64
@@ -138,6 +141,7 @@ trace:
             payload-field-type:
               class: structure
               members:
+                - id: uint32
                 - dispatch: uint32
                 - gpu_id: uint32
                 - value: double
