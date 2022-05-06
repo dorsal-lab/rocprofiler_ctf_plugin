@@ -5,8 +5,8 @@ CXXFLAGS = $(BASIC_FLAGS) -std=c++11
 RTR_FLAGS = $(CXXFLAGS) -D __HIP_PLATFORM_HCC__=1 -D __HIP_ROCclr__=1 -D HIP_VDI=1 -D AMD_INTERNAL_BUILD
 AUX_FLAGS = $(RTR_FLAGS) -D HIP_PROF_HIP_API_STRING -D PROF_API_IMPL 
 LINKFLAGS = --shared -lc -lstdc++
-CIMP = -I ./inc -I $(HSA_INCLUDE) -I $(ROCM_PATH)/include -I $(ROCM_PATH)/include/roctracer
-CIMP2 = -I ./inc -I $(HSA_INCLUDE)  -I $(ROCM_PATH)/include/rocprofiler
+CIMP = -I ./inc -I $(HSA_INCLUDE) -I $(ROCM_PATH)/include -I $(ROCTRACER_PATH)/include
+CIMP2 = -I ./inc -I $(HSA_INCLUDE)  -I $(ROCPROFILER_PATH)/include
 SRC_DIR = src
 AUX_DIR := src/aux
 ROCTRACER_FILES_DIR := src/roctracer_files
